@@ -153,9 +153,9 @@ function VistaConductor() {
   );
 }
 
-// 2. Dashboard Administrador (Maneja las dos secciones)
+// 2. Dashboard Administrador (Maneja las tres secciones)
 function DashboardAdmin() {
-  const [pestanaActiva, setPestanaActiva] = useState('reportes'); // 'reportes' o 'vehiculos'
+  const [pestanaActiva, setPestanaActiva] = useState('reportes'); // 'reportes', 'vehiculos', o 'qrs'
   
   // Estados para Reportes
   const [reportes, setReportes] = useState<any[]>([]);
@@ -164,6 +164,9 @@ function DashboardAdmin() {
   // Estados para Vehiculos
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [guardandoVehiculo, setGuardandoVehiculo] = useState(false);
+
+  // Estados para QRs Guardados
+  const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
 
   // Cargar Reportes
   useEffect(() => {
@@ -200,13 +203,27 @@ function DashboardAdmin() {
     }
   }, [pestanaActiva]);
 
+  // Cargar QRs Guardados
+  useEffect(() => {
+    if (pestanaActiva === 'qrs') {
+      const cargarQrs = async () => {
+        try {
+          const q = query(collection(db, 'qrs_guardados'), orderBy('fechaRegistro', 'desc'));
+          const querySnapshot = await getDocs(q);
+          const datos = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setQrsGuardados(datos);
+        } catch (error) {
+          console.error("Error al obtener QRs:", error);
+        }
+      };
+      cargarQrs();
+    }
+  }, [pestanaActiva]);
+
   // Funcion para registrar nuevo vehiculo
   const registrarVehiculo = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    // 1. Guardamos la referencia exacta del formulario antes de que React la borre
     const form = e.currentTarget; 
-    
     setGuardandoVehiculo(true);
     const formData = new FormData(form);
     
@@ -221,11 +238,7 @@ function DashboardAdmin() {
     try {
       await addDoc(collection(db, 'vehiculos'), nuevoVehiculo);
       alert("Vehiculo registrado correctamente");
-      
-      // 2. Usamos la variable guardada para limpiar los campos
       form.reset(); 
-      
-      // Recargar la lista inmediatamente para que aparezca sin cambiar de pestaña
       const querySnapshot = await getDocs(collection(db, 'vehiculos'));
       setVehiculos(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
@@ -236,10 +249,8 @@ function DashboardAdmin() {
     }
   };
 
-  // Funcion para calcular dias restantes
   const calcularEstadoVencimiento = (fechaString: string) => {
     if (!fechaString) return { texto: 'No registrado', clase: 'text-slate-500' };
-    
     const fechaVencimiento = new Date(fechaString);
     const hoy = new Date();
     const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
@@ -258,23 +269,29 @@ function DashboardAdmin() {
             <h1 className="text-3xl font-black text-slate-800">Panel de Control</h1>
           </div>
           <Link to="/" className="bg-white text-blue-600 border-2 border-blue-600 font-bold py-2 px-6 rounded-xl hover:bg-blue-50 transition-all">
-            Generador QR
+            Generar Nuevo QR
           </Link>
         </div>
 
         {/* Botones de Navegacion del Dashboard */}
-        <div className="flex space-x-4 mb-8">
+        <div className="flex space-x-4 mb-8 overflow-x-auto pb-2">
           <button 
             onClick={() => setPestanaActiva('reportes')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all ${pestanaActiva === 'reportes' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+            className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'reportes' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
           >
             Historial de Reportes
           </button>
           <button 
             onClick={() => setPestanaActiva('vehiculos')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all ${pestanaActiva === 'vehiculos' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+            className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'vehiculos' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
           >
-            Gestion de Vehiculos (Fechas)
+            Gestion de Vehiculos
+          </button>
+          <button 
+            onClick={() => setPestanaActiva('qrs')}
+            className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'qrs' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+          >
+            Codigos QR Guardados
           </button>
         </div>
 
@@ -321,8 +338,6 @@ function DashboardAdmin() {
         {/* PESTAÑA: VEHICULOS */}
         {pestanaActiva === 'vehiculos' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Formulario de Registro */}
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 lg:col-span-1 h-fit">
               <h2 className="text-xl font-bold text-slate-800 mb-6">Añadir Vehiculo</h2>
               <form onSubmit={registrarVehiculo} className="space-y-4">
@@ -348,11 +363,9 @@ function DashboardAdmin() {
               </form>
             </div>
 
-            {/* Lista de Vehiculos y Alertas */}
             <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 lg:col-span-2">
               <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                 <h2 className="text-xl font-bold text-slate-800">Estado de Documentos</h2>
-                <span className="text-xs text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200">El sistema alerta 10 dias antes</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -375,15 +388,9 @@ function DashboardAdmin() {
                       return (
                         <tr key={vehiculo.id} className="hover:bg-slate-50">
                           <td className="p-4 font-black text-slate-800 text-lg">{vehiculo.patente}</td>
-                          <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs border ${revInfo.clase}`}>{revInfo.texto}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs border ${circInfo.clase}`}>{circInfo.texto}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs border ${certInfo.clase}`}>{certInfo.texto}</span>
-                          </td>
+                          <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs border ${revInfo.clase}`}>{revInfo.texto}</span></td>
+                          <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs border ${circInfo.clase}`}>{circInfo.texto}</span></td>
+                          <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs border ${certInfo.clase}`}>{certInfo.texto}</span></td>
                         </tr>
                       );
                     })}
@@ -391,7 +398,35 @@ function DashboardAdmin() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
 
+        {/* PESTAÑA: CODIGOS QR GUARDADOS */}
+        {pestanaActiva === 'qrs' && (
+          <div>
+            {qrsGuardados.length === 0 ? (
+              <div className="bg-white p-12 rounded-3xl shadow-lg text-center border border-slate-100">
+                <p className="text-slate-500 text-lg">Aun no has guardado ningun codigo QR.</p>
+                <Link to="/" className="inline-block mt-4 text-blue-600 font-bold hover:underline">Ir al generador para guardar el primero</Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {qrsGuardados.map((qr) => (
+                  <div key={qr.id} className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100 hover:shadow-xl transition-shadow">
+                    <h3 className="text-2xl font-black text-slate-800 mb-1">{qr.patente}</h3>
+                    <p className="text-xs text-slate-400 mb-4">Guardado el: {qr.fechaRegistro ? qr.fechaRegistro.toDate().toLocaleDateString() : 'Hoy'}</p>
+                    
+                    <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 mb-4">
+                      <QRCodeSVG value={qr.url} size={140} level="H" includeMargin={false} />
+                    </div>
+                    
+                    <a href={qr.url} target="_blank" rel="noreferrer" className="w-full text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors">
+                      Probar Enlace
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -403,7 +438,26 @@ function DashboardAdmin() {
 // 3. Generador QR
 function GeneradorQR() {
   const [patente, setPatente] = useState('HBL123');
+  const [guardando, setGuardando] = useState(false);
   const urlVehiculo = `${window.location.origin}/v/${patente}`;
+
+  const guardarQR = async () => {
+    if (!patente) return;
+    setGuardando(true);
+    try {
+      await addDoc(collection(db, 'qrs_guardados'), {
+        patente: patente.toUpperCase(),
+        url: urlVehiculo,
+        fechaRegistro: serverTimestamp()
+      });
+      alert("¡QR Guardado exitosamente!");
+    } catch (error) {
+      console.error("Error al guardar QR:", error);
+      alert("Hubo un error al guardar el QR.");
+    } finally {
+      setGuardando(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -421,8 +475,21 @@ function GeneradorQR() {
         </div>
 
         <div className="flex flex-col gap-3">
-          <Link to={`/v/${patente}`} target="_blank" className="w-full bg-blue-50 text-blue-600 font-bold py-3 rounded-xl hover:bg-blue-100 transition-colors">Probar formulario</Link>
-          <Link to="/admin" className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg">Ver Panel Admin</Link>
+          <button 
+            onClick={guardarQR}
+            disabled={guardando}
+            className={`w-full font-bold py-3 rounded-xl transition-all shadow-md ${guardando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'}`}
+          >
+            {guardando ? 'Guardando...' : 'Guardar QR en Base de Datos'}
+          </button>
+          
+          <Link to={`/v/${patente}`} target="_blank" className="w-full bg-blue-50 text-blue-600 font-bold py-3 rounded-xl hover:bg-blue-100 transition-colors">
+            Probar formulario
+          </Link>
+          
+          <Link to="/admin" className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg">
+            Ver Panel Admin
+          </Link>
         </div>
       </div>
     </div>
