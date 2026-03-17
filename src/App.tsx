@@ -4,6 +4,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { collection, addDoc, serverTimestamp, query, orderBy, getDocs } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './lib/firebase';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 
 // 1. Vista Conductor (Checklist)
 function VistaConductor() {
@@ -153,30 +155,24 @@ function VistaConductor() {
   );
 }
 
-// 2. Dashboard Administrador (Maneja las tres secciones)
+// 2. Dashboard Administrador
 function DashboardAdmin() {
-  const [pestanaActiva, setPestanaActiva] = useState('reportes'); // 'reportes', 'vehiculos', o 'qrs'
+  const [pestanaActiva, setPestanaActiva] = useState('reportes');
   
-  // Estados para Reportes
   const [reportes, setReportes] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
-
-  // Estados para Vehiculos
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [guardandoVehiculo, setGuardandoVehiculo] = useState(false);
-
-  // Estados para QRs Guardados
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
+  const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
 
-  // Cargar Reportes
   useEffect(() => {
     if (pestanaActiva === 'reportes') {
       const cargarReportes = async () => {
         try {
           const q = query(collection(db, 'reportes'), orderBy('fecha', 'desc'));
           const querySnapshot = await getDocs(q);
-          const datos = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setReportes(datos);
+          setReportes(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
           console.error("Error al obtener reportes:", error);
         } finally {
@@ -187,14 +183,12 @@ function DashboardAdmin() {
     }
   }, [pestanaActiva]);
 
-  // Cargar Vehiculos
   useEffect(() => {
     if (pestanaActiva === 'vehiculos') {
       const cargarVehiculos = async () => {
         try {
           const querySnapshot = await getDocs(collection(db, 'vehiculos'));
-          const datos = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setVehiculos(datos);
+          setVehiculos(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
           console.error("Error al obtener vehiculos:", error);
         }
@@ -203,15 +197,13 @@ function DashboardAdmin() {
     }
   }, [pestanaActiva]);
 
-  // Cargar QRs Guardados
   useEffect(() => {
     if (pestanaActiva === 'qrs') {
       const cargarQrs = async () => {
         try {
           const q = query(collection(db, 'qrs_guardados'), orderBy('fechaRegistro', 'desc'));
           const querySnapshot = await getDocs(q);
-          const datos = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setQrsGuardados(datos);
+          setQrsGuardados(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
           console.error("Error al obtener QRs:", error);
         }
@@ -220,7 +212,6 @@ function DashboardAdmin() {
     }
   }, [pestanaActiva]);
 
-  // Funcion para registrar nuevo vehiculo
   const registrarVehiculo = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget; 
@@ -256,9 +247,30 @@ function DashboardAdmin() {
     const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
     const diasRestantes = Math.ceil(diferenciaTiempo / (1000 * 3600 * 24));
 
-    if (diasRestantes < 0) return { texto: `Vencido (hace ${Math.abs(diasRestantes)} dias)`, clase: 'bg-red-100 text-red-700 font-bold border-red-200' };
-    if (diasRestantes <= 10) return { texto: `Vence en ${diasRestantes} dias`, clase: 'bg-orange-100 text-orange-700 font-bold border-orange-200' };
-    return { texto: `OK (${diasRestantes} dias)`, clase: 'bg-green-100 text-green-700 font-bold border-green-200' };
+    if (diasRestantes < 0) return { texto: `Vencido (${Math.abs(diasRestantes)}d)`, clase: 'bg-red-100 text-red-700 font-bold border-red-200' };
+    if (diasRestantes <= 10) return { texto: `Vence en ${diasRestantes}d`, clase: 'bg-orange-100 text-orange-700 font-bold border-orange-200' };
+    return { texto: `OK`, clase: 'bg-green-100 text-green-700 font-bold border-green-200' };
+  };
+
+  const descargarPDF = async (patente: string) => {
+    setGenerandoPdf(patente);
+    const elemento = document.getElementById(`tarjeta-pdf-${patente}`);
+    if (elemento) {
+      try {
+        const imgData = await toPng(elemento, { 
+          quality: 1, 
+          pixelRatio: 3,
+          backgroundColor: '#ffffff'
+        });
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
+        pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
+        pdf.save(`QR_Vehiculo_${patente}.pdf`);
+      } catch (error) {
+        console.error("Error generando PDF", error);
+        alert("Ocurrio un problema al generar el documento PDF.");
+      }
+    }
+    setGenerandoPdf(null);
   };
 
   return (
@@ -273,29 +285,12 @@ function DashboardAdmin() {
           </Link>
         </div>
 
-        {/* Botones de Navegacion del Dashboard */}
         <div className="flex space-x-4 mb-8 overflow-x-auto pb-2">
-          <button 
-            onClick={() => setPestanaActiva('reportes')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'reportes' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
-          >
-            Historial de Reportes
-          </button>
-          <button 
-            onClick={() => setPestanaActiva('vehiculos')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'vehiculos' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
-          >
-            Gestion de Vehiculos
-          </button>
-          <button 
-            onClick={() => setPestanaActiva('qrs')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'qrs' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
-          >
-            Codigos QR Guardados
-          </button>
+          <button onClick={() => setPestanaActiva('reportes')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'reportes' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Historial de Reportes</button>
+          <button onClick={() => setPestanaActiva('vehiculos')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'vehiculos' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Gestion de Vehiculos</button>
+          <button onClick={() => setPestanaActiva('qrs')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'qrs' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Codigos QR Guardados</button>
         </div>
 
-        {/* PESTAÑA: REPORTES */}
         {pestanaActiva === 'reportes' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="overflow-x-auto">
@@ -318,11 +313,7 @@ function DashboardAdmin() {
                       <td className="p-4 font-bold text-slate-800">{rep.vehiculoId}</td>
                       <td className="p-4 text-slate-600 font-mono">{rep.kilometraje}</td>
                       <td className="p-4">
-                        {rep.fallaCritica ? (
-                          <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200">BLOQUEADO</span>
-                        ) : (
-                          <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200">APROBADO</span>
-                        )}
+                        {rep.fallaCritica ? <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200">BLOQUEADO</span> : <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200">APROBADO</span>}
                       </td>
                       <td className="p-4 text-center">
                         {rep.fotoUrl ? <a href={rep.fotoUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-sm font-medium">Ver Foto</a> : <span className="text-slate-400 text-sm">Sin foto</span>}
@@ -335,31 +326,16 @@ function DashboardAdmin() {
           </div>
         )}
 
-        {/* PESTAÑA: VEHICULOS */}
         {pestanaActiva === 'vehiculos' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 lg:col-span-1 h-fit">
               <h2 className="text-xl font-bold text-slate-800 mb-6">Añadir Vehiculo</h2>
               <form onSubmit={registrarVehiculo} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Patente</label>
-                  <input type="text" name="patente" required placeholder="Ej: AB1234" className="w-full p-3 border border-slate-300 rounded-xl uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Rev. Tecnica</label>
-                  <input type="date" name="vencimientoRevision" required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Permiso Circulacion</label>
-                  <input type="date" name="vencimientoCirculacion" required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Certificado</label>
-                  <input type="date" name="vencimientoCertificado" className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" />
-                </div>
-                <button type="submit" disabled={guardandoVehiculo} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-all mt-4">
-                  {guardandoVehiculo ? 'Guardando...' : 'Registrar Vehiculo'}
-                </button>
+                <div><label className="block text-sm font-medium text-slate-600 mb-1">Patente</label><input type="text" name="patente" required placeholder="Ej: AB1234" className="w-full p-3 border border-slate-300 rounded-xl uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" /></div>
+                <div><label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Rev. Tecnica</label><input type="date" name="vencimientoRevision" required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" /></div>
+                <div><label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Permiso Circulacion</label><input type="date" name="vencimientoCirculacion" required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" /></div>
+                <div><label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Certificado</label><input type="date" name="vencimientoCertificado" className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" /></div>
+                <button type="submit" disabled={guardandoVehiculo} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-all mt-4">{guardandoVehiculo ? 'Guardando...' : 'Registrar Vehiculo'}</button>
               </form>
             </div>
 
@@ -384,7 +360,6 @@ function DashboardAdmin() {
                       const revInfo = calcularEstadoVencimiento(vehiculo.vencimientoRevision);
                       const circInfo = calcularEstadoVencimiento(vehiculo.vencimientoCirculacion);
                       const certInfo = calcularEstadoVencimiento(vehiculo.vencimientoCertificado);
-                      
                       return (
                         <tr key={vehiculo.id} className="hover:bg-slate-50">
                           <td className="p-4 font-black text-slate-800 text-lg">{vehiculo.patente}</td>
@@ -401,7 +376,6 @@ function DashboardAdmin() {
           </div>
         )}
 
-        {/* PESTAÑA: CODIGOS QR GUARDADOS */}
         {pestanaActiva === 'qrs' && (
           <div>
             {qrsGuardados.length === 0 ? (
@@ -412,17 +386,32 @@ function DashboardAdmin() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {qrsGuardados.map((qr) => (
-                  <div key={qr.id} className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100 hover:shadow-xl transition-shadow">
-                    <h3 className="text-2xl font-black text-slate-800 mb-1">{qr.patente}</h3>
-                    <p className="text-xs text-slate-400 mb-4">Guardado el: {qr.fechaRegistro ? qr.fechaRegistro.toDate().toLocaleDateString() : 'Hoy'}</p>
+                  <div key={qr.id} className="flex flex-col gap-4">
                     
-                    <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 mb-4">
-                      <QRCodeSVG value={qr.url} size={140} level="H" includeMargin={false} />
+                    {/* Tarjeta Oculta/Visible que se capturara para el PDF */}
+                    <div 
+                      id={`tarjeta-pdf-${qr.patente}`} 
+                      className="bg-white p-8 flex flex-col items-center justify-center border-2 border-slate-200"
+                      style={{ width: '400px', height: '600px', margin: '0 auto', transform: 'scale(0.65)', transformOrigin: 'top center', marginBottom: '-200px' }} 
+                    >
+                      <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mb-8" />
+                      <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
+                      <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
+                      
+                      <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
+                        <QRCodeSVG value={qr.url} size={220} level="H" includeMargin={false} />
+                      </div>
+                      
+                      <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar<br/>el checklist de este vehiculo.</p>
                     </div>
-                    
-                    <a href={qr.url} target="_blank" rel="noreferrer" className="w-full text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors">
-                      Probar Enlace
-                    </a>
+
+                    <button 
+                      onClick={() => descargarPDF(qr.patente)}
+                      disabled={generandoPdf === qr.patente}
+                      className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-4 z-10 relative"
+                    >
+                      {generandoPdf === qr.patente ? 'Generando PDF...' : 'Descargar en PDF'}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -439,6 +428,7 @@ function DashboardAdmin() {
 function GeneradorQR() {
   const [patente, setPatente] = useState('HBL123');
   const [guardando, setGuardando] = useState(false);
+  const [generandoPdf, setGenerandoPdf] = useState(false);
   const urlVehiculo = `${window.location.origin}/v/${patente}`;
 
   const guardarQR = async () => {
@@ -459,9 +449,44 @@ function GeneradorQR() {
     }
   };
 
+  const descargarPDFActual = async () => {
+    setGenerandoPdf(true);
+    const elemento = document.getElementById('tarjeta-pdf-generador');
+    if (elemento) {
+      try {
+        const imgData = await toPng(elemento, { 
+          quality: 1, 
+          pixelRatio: 3,
+          backgroundColor: '#ffffff'
+        });
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
+        pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
+        pdf.save(`QR_Vehiculo_${patente}.pdf`);
+      } catch (error) {
+        console.error("Error generando PDF", error);
+        alert("Ocurrio un problema al generar el PDF.");
+      }
+    }
+    setGenerandoPdf(false);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-      <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full text-center border border-slate-100">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      
+      {/* Contenedor Oculto para Generar el PDF */}
+      <div style={{ position: 'fixed', top: '200vh', left: '-9999px' }}>
+        <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center border-2 border-slate-200" style={{ width: '400px', height: '600px' }}>
+          <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mb-8" />
+          <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase() || 'PATENTE'}</h2>
+          <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
+          <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
+            <QRCodeSVG value={urlVehiculo} size={220} level="H" includeMargin={false} />
+          </div>
+          <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar<br/>el checklist de este vehiculo.</p>
+        </div>
+      </div>
+
+      <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full text-center border border-slate-100 z-10 relative">
         <h2 className="text-2xl font-black text-slate-800 mb-2">Generador QR</h2>
         <p className="text-slate-500 mb-8 text-sm">Identificadores de Vehiculos</p>
         
@@ -475,19 +500,15 @@ function GeneradorQR() {
         </div>
 
         <div className="flex flex-col gap-3">
-          <button 
-            onClick={guardarQR}
-            disabled={guardando}
-            className={`w-full font-bold py-3 rounded-xl transition-all shadow-md ${guardando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'}`}
-          >
+          <button onClick={descargarPDFActual} disabled={generandoPdf} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-md">
+            {generandoPdf ? 'Generando PDF...' : 'Descargar QR en PDF'}
+          </button>
+
+          <button onClick={guardarQR} disabled={guardando} className={`w-full font-bold py-3 rounded-xl transition-all shadow-md ${guardando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'}`}>
             {guardando ? 'Guardando...' : 'Guardar QR en Base de Datos'}
           </button>
           
-          <Link to={`/v/${patente}`} target="_blank" className="w-full bg-blue-50 text-blue-600 font-bold py-3 rounded-xl hover:bg-blue-100 transition-colors">
-            Probar formulario
-          </Link>
-          
-          <Link to="/admin" className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg">
+          <Link to="/admin" className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-4">
             Ver Panel Admin
           </Link>
         </div>
