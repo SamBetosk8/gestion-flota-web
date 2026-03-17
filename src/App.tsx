@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useParams, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, addDoc, serverTimestamp, query, orderBy, getDocs, deleteDoc, doc, where } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, orderBy, getDocs, deleteDoc, doc, where, updateDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './lib/firebase';
 import { toPng } from 'html-to-image';
@@ -158,12 +158,22 @@ function VistaConductor() {
 // 2. Dashboard Administrador
 function DashboardAdmin() {
   const [pestanaActiva, setPestanaActiva] = useState('reportes');
-  const [busqueda, setBusqueda] = useState(''); // Estado para el filtro
+  const [busqueda, setBusqueda] = useState('');
   
   const [reportes, setReportes] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
+  
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [guardandoVehiculo, setGuardandoVehiculo] = useState(false);
+  
+  // Estado para controlar el formulario de vehiculos
+  const [formVehiculo, setFormVehiculo] = useState({
+    patente: '',
+    vencimientoRevision: '',
+    vencimientoCirculacion: '',
+    vencimientoCertificado: ''
+  });
+
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
 
@@ -213,31 +223,74 @@ function DashboardAdmin() {
     }
   }, [pestanaActiva]);
 
-  const registrarVehiculo = async (e: React.FormEvent<HTMLFormElement>) => {
+  const registrarOActualizarVehiculo = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const form = e.currentTarget; 
     setGuardandoVehiculo(true);
-    const formData = new FormData(form);
-    
-    const nuevoVehiculo = {
-      patente: (formData.get('patente') as string).toUpperCase(),
-      vencimientoRevision: formData.get('vencimientoRevision'),
-      vencimientoCirculacion: formData.get('vencimientoCirculacion'),
-      vencimientoCertificado: formData.get('vencimientoCertificado'),
-      fechaRegistro: serverTimestamp()
-    };
+    const patenteMayuscula = formVehiculo.patente.toUpperCase();
 
     try {
-      await addDoc(collection(db, 'vehiculos'), nuevoVehiculo);
-      alert("Vehiculo registrado correctamente");
-      form.reset(); 
-      const querySnapshot = await getDocs(collection(db, 'vehiculos'));
-      setVehiculos(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      // Buscar si el vehiculo ya existe
+      const q = query(collection(db, 'vehiculos'), where('patente', '==', patenteMayuscula));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        // Vehiculo existe -> Preguntar si desea actualizar
+        const confirmar = window.confirm("Este vehiculo ya esta registrado. ¿Deseas actualizar sus fechas de vencimiento?");
+        if (confirmar) {
+          const idVehiculoExistente = querySnapshot.docs[0].id;
+          await updateDoc(doc(db, 'vehiculos', idVehiculoExistente), {
+            vencimientoRevision: formVehiculo.vencimientoRevision,
+            vencimientoCirculacion: formVehiculo.vencimientoCirculacion,
+            vencimientoCertificado: formVehiculo.vencimientoCertificado
+          });
+          alert("Fechas actualizadas correctamente.");
+        } else {
+          setGuardandoVehiculo(false);
+          return;
+        }
+      } else {
+        // Vehiculo nuevo -> Crear registro
+        await addDoc(collection(db, 'vehiculos'), {
+          patente: patenteMayuscula,
+          vencimientoRevision: formVehiculo.vencimientoRevision,
+          vencimientoCirculacion: formVehiculo.vencimientoCirculacion,
+          vencimientoCertificado: formVehiculo.vencimientoCertificado,
+          fechaRegistro: serverTimestamp()
+        });
+        alert("Vehiculo registrado correctamente.");
+      }
+
+      // Limpiar formulario y recargar lista
+      setFormVehiculo({ patente: '', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '' });
+      const nuevaLista = await getDocs(collection(db, 'vehiculos'));
+      setVehiculos(nuevaLista.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       console.error("Error detallado:", error);
-      alert("Error al guardar vehiculo");
+      alert("Error al procesar el vehiculo");
     } finally {
       setGuardandoVehiculo(false);
+    }
+  };
+
+  const editarVehiculoEnFormulario = (vehiculo: any) => {
+    setFormVehiculo({
+      patente: vehiculo.patente,
+      vencimientoRevision: vehiculo.vencimientoRevision,
+      vencimientoCirculacion: vehiculo.vencimientoCirculacion,
+      vencimientoCertificado: vehiculo.vencimientoCertificado || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Sube la pantalla para ver el formulario
+  };
+
+  const eliminarVehiculo = async (id: string) => {
+    const confirmar = window.confirm("¿Estas seguro de que deseas eliminar este vehiculo del sistema?");
+    if (confirmar) {
+      try {
+        await deleteDoc(doc(db, 'vehiculos', id));
+        setVehiculos(prev => prev.filter(v => v.id !== id));
+      } catch (error) {
+        console.error("Error al eliminar vehiculo:", error);
+      }
     }
   };
 
@@ -287,7 +340,7 @@ function DashboardAdmin() {
     setGenerandoPdf(null);
   };
 
-  // Filtrado de datos basado en el buscador
+  // Filtrado
   const reportesFiltrados = reportes.filter(r => r.vehiculoId?.toLowerCase().includes(busqueda.toLowerCase()));
   const vehiculosFiltrados = vehiculos.filter(v => v.patente?.toLowerCase().includes(busqueda.toLowerCase()));
   const qrsFiltrados = qrsGuardados.filter(q => q.patente?.toLowerCase().includes(busqueda.toLowerCase()));
@@ -300,7 +353,6 @@ function DashboardAdmin() {
             <h1 className="text-3xl font-black text-slate-800">Panel de Control</h1>
           </div>
           
-          {/* Barra de busqueda global */}
           <div className="w-full md:w-auto flex-1 max-w-md mx-auto md:mx-4">
             <input 
               type="text" 
@@ -360,19 +412,40 @@ function DashboardAdmin() {
         )}
 
         {pestanaActiva === 'vehiculos' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 lg:col-span-1 h-fit">
-              <h2 className="text-xl font-bold text-slate-800 mb-6">Añadir Vehiculo</h2>
-              <form onSubmit={registrarVehiculo} className="space-y-4">
-                <div><label className="block text-sm font-medium text-slate-600 mb-1">Patente</label><input type="text" name="patente" required placeholder="Ej: AB1234" className="w-full p-3 border border-slate-300 rounded-xl uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" /></div>
-                <div><label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Rev. Tecnica</label><input type="date" name="vencimientoRevision" required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" /></div>
-                <div><label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Permiso Circulacion</label><input type="date" name="vencimientoCirculacion" required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" /></div>
-                <div><label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Certificado</label><input type="date" name="vencimientoCertificado" className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" /></div>
-                <button type="submit" disabled={guardandoVehiculo} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-all mt-4">{guardandoVehiculo ? 'Guardando...' : 'Registrar Vehiculo'}</button>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            {/* Formulario de Vehiculo */}
+            <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
+              <h2 className="text-xl font-bold text-slate-800 mb-6">Añadir / Actualizar Vehiculo</h2>
+              <form onSubmit={registrarOActualizarVehiculo} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Patente</label>
+                  <input type="text" value={formVehiculo.patente} onChange={(e) => setFormVehiculo({...formVehiculo, patente: e.target.value})} required placeholder="Ej: AB1234" className="w-full p-3 border border-slate-300 rounded-xl uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Rev. Tecnica</label>
+                  <input type="date" value={formVehiculo.vencimientoRevision} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoRevision: e.target.value})} required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Permiso Circulacion</label>
+                  <input type="date" value={formVehiculo.vencimientoCirculacion} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoCirculacion: e.target.value})} required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Certificado</label>
+                  <input type="date" value={formVehiculo.vencimientoCertificado} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoCertificado: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" />
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <button type="submit" disabled={guardandoVehiculo} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-all">
+                    {guardandoVehiculo ? 'Guardando...' : 'Guardar Datos'}
+                  </button>
+                  <button type="button" onClick={() => setFormVehiculo({ patente: '', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '' })} className="px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all">
+                    Limpiar
+                  </button>
+                </div>
               </form>
             </div>
 
-            <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 lg:col-span-2">
+            {/* Lista de Vehiculos */}
+            <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 xl:col-span-2">
               <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                 <h2 className="text-xl font-bold text-slate-800">Estado de Documentos</h2>
               </div>
@@ -384,11 +457,12 @@ function DashboardAdmin() {
                       <th className="p-4 font-bold">Rev. Tecnica</th>
                       <th className="p-4 font-bold">Permiso Circ.</th>
                       <th className="p-4 font-bold">Certificado</th>
+                      <th className="p-4 font-bold text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {vehiculosFiltrados.length === 0 ? (
-                      <tr><td colSpan={4} className="p-8 text-center text-slate-400">No se encontraron vehiculos.</td></tr>
+                      <tr><td colSpan={5} className="p-8 text-center text-slate-400">No se encontraron vehiculos.</td></tr>
                     ) : vehiculosFiltrados.map((vehiculo) => {
                       const revInfo = calcularEstadoVencimiento(vehiculo.vencimientoRevision);
                       const circInfo = calcularEstadoVencimiento(vehiculo.vencimientoCirculacion);
@@ -399,6 +473,10 @@ function DashboardAdmin() {
                           <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs border ${revInfo.clase}`}>{revInfo.texto}</span></td>
                           <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs border ${circInfo.clase}`}>{circInfo.texto}</span></td>
                           <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs border ${certInfo.clase}`}>{certInfo.texto}</span></td>
+                          <td className="p-4 flex gap-2 justify-center">
+                            <button onClick={() => editarVehiculoEnFormulario(vehiculo)} className="text-xs font-bold px-3 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">Editar</button>
+                            <button onClick={() => eliminarVehiculo(vehiculo.id)} className="text-xs font-bold px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">Eliminar</button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -420,7 +498,6 @@ function DashboardAdmin() {
                 {qrsFiltrados.map((qr) => (
                   <div key={qr.id} className="flex flex-col gap-2">
                     
-                    {/* Vista Previa Responsiva */}
                     <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
                       <img src="/logo.webp" alt="Logo" className="h-12 object-contain mx-auto mb-4" />
                       <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
@@ -430,7 +507,6 @@ function DashboardAdmin() {
                       </div>
                     </div>
 
-                    {/* Tarjeta Oculta EXACTA para el PDF */}
                     <div style={{ position: 'fixed', top: '200vh', left: '-9999px' }}>
                       <div 
                         id={`tarjeta-pdf-${qr.patente}`} 
@@ -447,18 +523,11 @@ function DashboardAdmin() {
                       </div>
                     </div>
 
-                    <button 
-                      onClick={() => descargarPDF(qr.patente)}
-                      disabled={generandoPdf === qr.patente}
-                      className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2"
-                    >
+                    <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2">
                       {generandoPdf === qr.patente ? 'Generando...' : 'Descargar en PDF'}
                     </button>
                     
-                    <button 
-                      onClick={() => eliminarQR(qr.id)}
-                      className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors"
-                    >
+                    <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors">
                       Eliminar QR
                     </button>
                   </div>
@@ -486,11 +555,9 @@ function GeneradorQR() {
     try {
       const patenteMayuscula = patente.toUpperCase();
       
-      // 1. Verificar si la patente ya existe en Firebase
       const q = query(collection(db, 'qrs_guardados'), where('patente', '==', patenteMayuscula));
       const querySnapshot = await getDocs(q);
 
-      // Solo lo guardamos si la busqueda nos dio "vacio" (no existe)
       if (querySnapshot.empty) {
         await addDoc(collection(db, 'qrs_guardados'), {
           patente: patenteMayuscula,
@@ -499,7 +566,6 @@ function GeneradorQR() {
         });
       }
 
-      // 2. Generar el PDF siempre (aunque ya existiera en Firebase)
       const elemento = document.getElementById('tarjeta-pdf-generador');
       if (elemento) {
         const imgData = await toPng(elemento, { 
@@ -523,7 +589,6 @@ function GeneradorQR() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       
-      {/* Contenedor Oculto EXACTO para Generar el PDF */}
       <div style={{ position: 'fixed', top: '200vh', left: '-9999px' }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
           <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
