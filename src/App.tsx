@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useParams, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, addDoc, serverTimestamp, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, orderBy, getDocs, deleteDoc, doc, where } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './lib/firebase';
 import { toPng } from 'html-to-image';
@@ -158,6 +158,7 @@ function VistaConductor() {
 // 2. Dashboard Administrador
 function DashboardAdmin() {
   const [pestanaActiva, setPestanaActiva] = useState('reportes');
+  const [busqueda, setBusqueda] = useState(''); // Estado para el filtro
   
   const [reportes, setReportes] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
@@ -240,6 +241,19 @@ function DashboardAdmin() {
     }
   };
 
+  const eliminarQR = async (id: string) => {
+    const confirmar = window.confirm("¿Estas seguro de que deseas eliminar este QR guardado?");
+    if (confirmar) {
+      try {
+        await deleteDoc(doc(db, 'qrs_guardados', id));
+        setQrsGuardados(prev => prev.filter(qr => qr.id !== id));
+      } catch (error) {
+        console.error("Error al eliminar QR:", error);
+        alert("Hubo un error al eliminar el QR.");
+      }
+    }
+  };
+
   const calcularEstadoVencimiento = (fechaString: string) => {
     if (!fechaString) return { texto: 'No registrado', clase: 'text-slate-500' };
     const fechaVencimiento = new Date(fechaString);
@@ -273,14 +287,31 @@ function DashboardAdmin() {
     setGenerandoPdf(null);
   };
 
+  // Filtrado de datos basado en el buscador
+  const reportesFiltrados = reportes.filter(r => r.vehiculoId?.toLowerCase().includes(busqueda.toLowerCase()));
+  const vehiculosFiltrados = vehiculos.filter(v => v.patente?.toLowerCase().includes(busqueda.toLowerCase()));
+  const qrsFiltrados = qrsGuardados.filter(q => q.patente?.toLowerCase().includes(busqueda.toLowerCase()));
+
   return (
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
             <h1 className="text-3xl font-black text-slate-800">Panel de Control</h1>
           </div>
-          <Link to="/" className="bg-white text-blue-600 border-2 border-blue-600 font-bold py-2 px-6 rounded-xl hover:bg-blue-50 transition-all">
+          
+          {/* Barra de busqueda global */}
+          <div className="w-full md:w-auto flex-1 max-w-md mx-auto md:mx-4">
+            <input 
+              type="text" 
+              placeholder="Buscar patente... Ej: AB12" 
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="w-full p-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none bg-white shadow-sm"
+            />
+          </div>
+
+          <Link to="/" className="bg-white text-blue-600 border-2 border-blue-600 font-bold py-3 px-6 rounded-xl hover:bg-blue-50 transition-all text-center w-full md:w-auto">
             Generar Nuevo QR
           </Link>
         </div>
@@ -307,7 +338,9 @@ function DashboardAdmin() {
                 <tbody className="divide-y divide-slate-100">
                   {cargandoReportes ? (
                     <tr><td colSpan={5} className="p-8 text-center text-slate-400">Cargando reportes...</td></tr>
-                  ) : reportes.map((rep) => (
+                  ) : reportesFiltrados.length === 0 ? (
+                    <tr><td colSpan={5} className="p-8 text-center text-slate-400">No se encontraron reportes.</td></tr>
+                  ) : reportesFiltrados.map((rep) => (
                     <tr key={rep.id} className="hover:bg-slate-50">
                       <td className="p-4 text-slate-600 text-sm">{rep.fecha ? rep.fecha.toDate().toLocaleString() : 'Reciente'}</td>
                       <td className="p-4 font-bold text-slate-800">{rep.vehiculoId}</td>
@@ -354,9 +387,9 @@ function DashboardAdmin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {vehiculos.length === 0 ? (
-                      <tr><td colSpan={4} className="p-8 text-center text-slate-400">No hay vehiculos registrados.</td></tr>
-                    ) : vehiculos.map((vehiculo) => {
+                    {vehiculosFiltrados.length === 0 ? (
+                      <tr><td colSpan={4} className="p-8 text-center text-slate-400">No se encontraron vehiculos.</td></tr>
+                    ) : vehiculosFiltrados.map((vehiculo) => {
                       const revInfo = calcularEstadoVencimiento(vehiculo.vencimientoRevision);
                       const circInfo = calcularEstadoVencimiento(vehiculo.vencimientoCirculacion);
                       const certInfo = calcularEstadoVencimiento(vehiculo.vencimientoCertificado);
@@ -378,17 +411,16 @@ function DashboardAdmin() {
 
         {pestanaActiva === 'qrs' && (
           <div>
-            {qrsGuardados.length === 0 ? (
+            {qrsFiltrados.length === 0 ? (
               <div className="bg-white p-12 rounded-3xl shadow-lg text-center border border-slate-100">
-                <p className="text-slate-500 text-lg">Aun no has guardado ningun codigo QR.</p>
-                <Link to="/" className="inline-block mt-4 text-blue-600 font-bold hover:underline">Ir al generador para guardar el primero</Link>
+                <p className="text-slate-500 text-lg">No se encontraron codigos QR guardados.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {qrsGuardados.map((qr) => (
-                  <div key={qr.id} className="flex flex-col gap-4">
+                {qrsFiltrados.map((qr) => (
+                  <div key={qr.id} className="flex flex-col gap-2">
                     
-                    {/* Vista Previa Responsiva (Se adapta perfecto a la pantalla) */}
+                    {/* Vista Previa Responsiva */}
                     <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
                       <img src="/logo.webp" alt="Logo" className="h-12 object-contain mx-auto mb-4" />
                       <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
@@ -398,7 +430,7 @@ function DashboardAdmin() {
                       </div>
                     </div>
 
-                    {/* Tarjeta Oculta EXACTA para el PDF (Sin distorsiones) */}
+                    {/* Tarjeta Oculta EXACTA para el PDF */}
                     <div style={{ position: 'fixed', top: '200vh', left: '-9999px' }}>
                       <div 
                         id={`tarjeta-pdf-${qr.patente}`} 
@@ -420,7 +452,14 @@ function DashboardAdmin() {
                       disabled={generandoPdf === qr.patente}
                       className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2"
                     >
-                      {generandoPdf === qr.patente ? 'Generando PDF...' : 'Descargar en PDF'}
+                      {generandoPdf === qr.patente ? 'Generando...' : 'Descargar en PDF'}
+                    </button>
+                    
+                    <button 
+                      onClick={() => eliminarQR(qr.id)}
+                      className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors"
+                    >
+                      Eliminar QR
                     </button>
                   </div>
                 ))}
@@ -440,20 +479,27 @@ function GeneradorQR() {
   const [procesando, setProcesando] = useState(false);
   const urlVehiculo = `${window.location.origin}/v/${patente}`;
 
-  // Nueva funcion unificada: Guarda y Descarga
   const guardarYDescargar = async () => {
     if (!patente) return;
     setProcesando(true);
     
     try {
-      // 1. Guardar en Base de Datos
-      await addDoc(collection(db, 'qrs_guardados'), {
-        patente: patente.toUpperCase(),
-        url: urlVehiculo,
-        fechaRegistro: serverTimestamp()
-      });
+      const patenteMayuscula = patente.toUpperCase();
+      
+      // 1. Verificar si la patente ya existe en Firebase
+      const q = query(collection(db, 'qrs_guardados'), where('patente', '==', patenteMayuscula));
+      const querySnapshot = await getDocs(q);
 
-      // 2. Generar el PDF oculto
+      // Solo lo guardamos si la busqueda nos dio "vacio" (no existe)
+      if (querySnapshot.empty) {
+        await addDoc(collection(db, 'qrs_guardados'), {
+          patente: patenteMayuscula,
+          url: urlVehiculo,
+          fechaRegistro: serverTimestamp()
+        });
+      }
+
+      // 2. Generar el PDF siempre (aunque ya existiera en Firebase)
       const elemento = document.getElementById('tarjeta-pdf-generador');
       if (elemento) {
         const imgData = await toPng(elemento, { 
@@ -466,7 +512,6 @@ function GeneradorQR() {
         pdf.save(`QR_Vehiculo_${patente}.pdf`);
       }
 
-      alert("¡QR Guardado y descargado exitosamente!");
     } catch (error) {
       console.error("Error al procesar:", error);
       alert("Hubo un error al procesar el QR.");
@@ -500,7 +545,6 @@ function GeneradorQR() {
           <input type="text" value={patente} onChange={(e) => setPatente(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all font-mono text-lg text-center" placeholder="EJ: ABCD12" />
         </div>
 
-        {/* Vista previa en pantalla */}
         <div className="flex justify-center bg-white p-6 border-4 border-slate-50 rounded-3xl mb-8 shadow-inner">
           <QRCodeSVG value={urlVehiculo} size={180} level="H" includeMargin={false} />
         </div>
