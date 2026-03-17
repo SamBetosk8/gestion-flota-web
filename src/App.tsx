@@ -384,31 +384,41 @@ function DashboardAdmin() {
                 <Link to="/" className="inline-block mt-4 text-blue-600 font-bold hover:underline">Ir al generador para guardar el primero</Link>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {qrsGuardados.map((qr) => (
                   <div key={qr.id} className="flex flex-col gap-4">
                     
-                    {/* Tarjeta Oculta/Visible que se capturara para el PDF */}
-                    <div 
-                      id={`tarjeta-pdf-${qr.patente}`} 
-                      className="bg-white p-8 flex flex-col items-center justify-center border-2 border-slate-200"
-                      style={{ width: '400px', height: '600px', margin: '0 auto', transform: 'scale(0.65)', transformOrigin: 'top center', marginBottom: '-200px' }} 
-                    >
-                      <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mb-8" />
-                      <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
-                      <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
-                      
-                      <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
-                        <QRCodeSVG value={qr.url} size={220} level="H" includeMargin={false} />
+                    {/* Vista Previa Responsiva (Se adapta perfecto a la pantalla) */}
+                    <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
+                      <img src="/logo.webp" alt="Logo" className="h-12 object-contain mx-auto mb-4" />
+                      <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
+                      <p className="text-xs text-slate-500 font-bold uppercase mb-4">Control de Flota</p>
+                      <div className="bg-white p-2 rounded-xl border-4 border-slate-800 mb-4 shadow-sm">
+                        <QRCodeSVG value={qr.url} size={130} level="H" includeMargin={false} />
                       </div>
-                      
-                      <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar<br/>el checklist de este vehiculo.</p>
+                    </div>
+
+                    {/* Tarjeta Oculta EXACTA para el PDF (Sin distorsiones) */}
+                    <div style={{ position: 'fixed', top: '200vh', left: '-9999px' }}>
+                      <div 
+                        id={`tarjeta-pdf-${qr.patente}`} 
+                        className="bg-white p-8 flex flex-col items-center justify-center"
+                        style={{ width: '400px', height: '600px', backgroundColor: 'white' }} 
+                      >
+                        <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
+                        <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
+                        <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
+                        <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
+                          <QRCodeSVG value={qr.url} size={220} level="H" includeMargin={false} />
+                        </div>
+                        <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar<br/>el checklist de este vehiculo.</p>
+                      </div>
                     </div>
 
                     <button 
                       onClick={() => descargarPDF(qr.patente)}
                       disabled={generandoPdf === qr.patente}
-                      className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-4 z-10 relative"
+                      className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2"
                     >
                       {generandoPdf === qr.patente ? 'Generando PDF...' : 'Descargar en PDF'}
                     </button>
@@ -427,33 +437,25 @@ function DashboardAdmin() {
 // 3. Generador QR
 function GeneradorQR() {
   const [patente, setPatente] = useState('HBL123');
-  const [guardando, setGuardando] = useState(false);
-  const [generandoPdf, setGenerandoPdf] = useState(false);
+  const [procesando, setProcesando] = useState(false);
   const urlVehiculo = `${window.location.origin}/v/${patente}`;
 
-  const guardarQR = async () => {
+  // Nueva funcion unificada: Guarda y Descarga
+  const guardarYDescargar = async () => {
     if (!patente) return;
-    setGuardando(true);
+    setProcesando(true);
+    
     try {
+      // 1. Guardar en Base de Datos
       await addDoc(collection(db, 'qrs_guardados'), {
         patente: patente.toUpperCase(),
         url: urlVehiculo,
         fechaRegistro: serverTimestamp()
       });
-      alert("¡QR Guardado exitosamente!");
-    } catch (error) {
-      console.error("Error al guardar QR:", error);
-      alert("Hubo un error al guardar el QR.");
-    } finally {
-      setGuardando(false);
-    }
-  };
 
-  const descargarPDFActual = async () => {
-    setGenerandoPdf(true);
-    const elemento = document.getElementById('tarjeta-pdf-generador');
-    if (elemento) {
-      try {
+      // 2. Generar el PDF oculto
+      const elemento = document.getElementById('tarjeta-pdf-generador');
+      if (elemento) {
         const imgData = await toPng(elemento, { 
           quality: 1, 
           pixelRatio: 3,
@@ -462,21 +464,24 @@ function GeneradorQR() {
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
         pdf.save(`QR_Vehiculo_${patente}.pdf`);
-      } catch (error) {
-        console.error("Error generando PDF", error);
-        alert("Ocurrio un problema al generar el PDF.");
       }
+
+      alert("¡QR Guardado y descargado exitosamente!");
+    } catch (error) {
+      console.error("Error al procesar:", error);
+      alert("Hubo un error al procesar el QR.");
+    } finally {
+      setProcesando(false);
     }
-    setGenerandoPdf(false);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       
-      {/* Contenedor Oculto para Generar el PDF */}
+      {/* Contenedor Oculto EXACTO para Generar el PDF */}
       <div style={{ position: 'fixed', top: '200vh', left: '-9999px' }}>
-        <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center border-2 border-slate-200" style={{ width: '400px', height: '600px' }}>
-          <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mb-8" />
+        <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
+          <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase() || 'PATENTE'}</h2>
           <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
           <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
@@ -492,23 +497,24 @@ function GeneradorQR() {
         
         <div className="mb-8 text-left">
           <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Patente / ID</label>
-          <input type="text" value={patente} onChange={(e) => setPatente(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all font-mono text-lg" placeholder="EJ: ABCD12" />
+          <input type="text" value={patente} onChange={(e) => setPatente(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all font-mono text-lg text-center" placeholder="EJ: ABCD12" />
         </div>
 
-        <div className="flex justify-center bg-white p-6 border-4 border-slate-50 rounded-3xl mb-6 shadow-inner">
+        {/* Vista previa en pantalla */}
+        <div className="flex justify-center bg-white p-6 border-4 border-slate-50 rounded-3xl mb-8 shadow-inner">
           <QRCodeSVG value={urlVehiculo} size={180} level="H" includeMargin={false} />
         </div>
 
-        <div className="flex flex-col gap-3">
-          <button onClick={descargarPDFActual} disabled={generandoPdf} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-md">
-            {generandoPdf ? 'Generando PDF...' : 'Descargar QR en PDF'}
-          </button>
-
-          <button onClick={guardarQR} disabled={guardando} className={`w-full font-bold py-3 rounded-xl transition-all shadow-md ${guardando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'}`}>
-            {guardando ? 'Guardando...' : 'Guardar QR en Base de Datos'}
+        <div className="flex flex-col gap-4">
+          <button 
+            onClick={guardarYDescargar} 
+            disabled={procesando} 
+            className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${procesando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+          >
+            {procesando ? 'Procesando...' : 'Guardar y Descargar PDF'}
           </button>
           
-          <Link to="/admin" className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-4">
+          <Link to="/admin" className="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors mt-2">
             Ver Panel Admin
           </Link>
         </div>
