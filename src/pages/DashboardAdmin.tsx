@@ -5,11 +5,11 @@ import { collection, addDoc, serverTimestamp, query, orderBy, getDocs, deleteDoc
 import { db } from '../lib/firebase';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import { LOGO_BASE64 } from '../constants';
 
 export default function DashboardAdmin() {
   const [pestanaActiva, setPestanaActiva] = useState('reportes');
   const [busqueda, setBusqueda] = useState('');
-  const [logoBase64, setLogoBase64] = useState<string>('');
   
   const [reportes, setReportes] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
@@ -26,22 +26,6 @@ export default function DashboardAdmin() {
 
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
-
-  useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-        setLogoBase64(canvas.toDataURL('image/png'));
-      }
-    };
-    img.src = '/logo.jpg';
-  }, []);
 
   useEffect(() => {
     if (pestanaActiva === 'reportes') {
@@ -186,8 +170,6 @@ export default function DashboardAdmin() {
     const elemento = document.getElementById(`tarjeta-pdf-${patente}`);
     if (elemento) {
       try {
-        await toPng(elemento, { cacheBust: true, pixelRatio: 1 });
-
         const imgData = await toPng(elemento, { 
           quality: 1, 
           pixelRatio: 3,
@@ -198,13 +180,12 @@ export default function DashboardAdmin() {
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
         
-        const nombreArchivo = `QR_Vehiculo_${patente}.pdf`;
+        const nombreArchivo = `QR_${patente}.pdf`;
         const esCelular = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        
+
         const pdfBlob = pdf.output('blob');
         const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
-        // Correccion TypeScript TS2774
         if (esCelular && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file] });
         } else {
@@ -374,7 +355,7 @@ export default function DashboardAdmin() {
                   <div key={qr.id} className="flex flex-col gap-2 relative">
                     
                     <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
-                      <img src="/logo.jpg" alt="Logo" className="h-12 object-contain mx-auto mb-4" />
+                      <img src={LOGO_BASE64} alt="Logo" className="h-12 object-contain mx-auto mb-4" />
                       <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
                       <p className="text-xs text-slate-500 font-bold uppercase mb-4">Control de Flota</p>
                       <div className="bg-white p-2 rounded-xl border-4 border-slate-800 mb-4 shadow-sm">
@@ -382,14 +363,13 @@ export default function DashboardAdmin() {
                       </div>
                     </div>
 
-                    <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -50, pointerEvents: 'none' }}>
+                    <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ zIndex: -999, opacity: 0 }}>
                       <div 
                         id={`tarjeta-pdf-${qr.patente}`} 
                         className="bg-white p-8 flex flex-col items-center justify-center"
                         style={{ width: '400px', height: '600px', backgroundColor: 'white' }} 
                       >
-                        {logoBase64 && <img src={logoBase64} alt="Logo Empresa" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
-                        {!logoBase64 && <img src="/logo.jpg" alt="Logo Fallback" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
+                        <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
                         <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
                         <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
                         <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
@@ -399,8 +379,8 @@ export default function DashboardAdmin() {
                       </div>
                     </div>
 
-                    <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente || !logoBase64} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2 relative z-10">
-                      {generandoPdf === qr.patente ? 'Generando...' : (!logoBase64 ? 'Cargando imagen...' : 'Descargar en PDF')}
+                    <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2 relative z-10">
+                      {generandoPdf === qr.patente ? 'Generando...' : 'Descargar en PDF'}
                     </button>
                     
                     <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10">
