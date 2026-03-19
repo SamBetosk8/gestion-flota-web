@@ -48,14 +48,19 @@ export default function GeneradorQR() {
         const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
         if (esCelular && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file] });
+          try {
+            await navigator.share({ files: [file] });
+          } catch (e) {
+            console.log("Compartir cancelado, forzando descarga.");
+            pdf.save(nombreArchivo);
+          }
         } else {
           pdf.save(nombreArchivo);
         }
       }
     } catch (error) {
       console.error(error);
-      alert("Error al procesar.");
+      alert("Error al generar el PDF. Verifica la consola.");
     } finally {
       setProcesando(false);
     }
@@ -64,7 +69,8 @@ export default function GeneradorQR() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative">
       
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ zIndex: -999, opacity: 0 }}>
+      {/* Contenedor desplazado fuera de la pantalla (seguro para HTML-to-Image y Safari) */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px' }}>
           <img src={LOGO_BASE64} alt="Logo" style={{ height: '90px', marginBottom: '30px' }} />
           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase()}</h2>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, addDoc, serverTimestamp, query, orderBy, getDocs, deleteDoc, doc, where, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, deleteDoc, doc, where, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -35,7 +35,7 @@ export default function DashboardAdmin() {
           const querySnapshot = await getDocs(q);
           setReportes(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
-          console.error("Error al obtener reportes:", error);
+          console.error(error);
         } finally {
           setCargandoReportes(false);
         }
@@ -51,7 +51,7 @@ export default function DashboardAdmin() {
           const querySnapshot = await getDocs(collection(db, 'vehiculos'));
           setVehiculos(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
-          console.error("Error al obtener vehiculos:", error);
+          console.error(error);
         }
       };
       cargarVehiculos();
@@ -66,7 +66,7 @@ export default function DashboardAdmin() {
           const querySnapshot = await getDocs(q);
           setQrsGuardados(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
-          console.error("Error al obtener QRs:", error);
+          console.error(error);
         }
       };
       cargarQrs();
@@ -111,7 +111,7 @@ export default function DashboardAdmin() {
       const nuevaLista = await getDocs(collection(db, 'vehiculos'));
       setVehiculos(nuevaLista.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
-      console.error("Error detallado:", error);
+      console.error(error);
       alert("Error al procesar el vehiculo");
     } finally {
       setGuardandoVehiculo(false);
@@ -135,7 +135,7 @@ export default function DashboardAdmin() {
         await deleteDoc(doc(db, 'vehiculos', id));
         setVehiculos(prev => prev.filter(v => v.id !== id));
       } catch (error) {
-        console.error("Error al eliminar vehiculo:", error);
+        console.error(error);
       }
     }
   };
@@ -147,7 +147,7 @@ export default function DashboardAdmin() {
         await deleteDoc(doc(db, 'qrs_guardados', id));
         setQrsGuardados(prev => prev.filter(qr => qr.id !== id));
       } catch (error) {
-        console.error("Error al eliminar QR:", error);
+        console.error(error);
         alert("Hubo un error al eliminar el QR.");
       }
     }
@@ -187,12 +187,17 @@ export default function DashboardAdmin() {
         const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
         if (esCelular && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file] });
+          try {
+            await navigator.share({ files: [file] });
+          } catch (e) {
+            console.log("Compartir cancelado, forzando descarga.");
+            pdf.save(nombreArchivo);
+          }
         } else {
           pdf.save(nombreArchivo);
         }
       } catch (error) {
-        console.error("Error generando PDF", error);
+        console.error(error);
         alert("Ocurrio un problema al generar el documento PDF.");
       }
     }
@@ -204,7 +209,7 @@ export default function DashboardAdmin() {
   const qrsFiltrados = qrsGuardados.filter(q => q.patente?.toLowerCase().includes(busqueda.toLowerCase()));
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8 z-10 relative">
+    <div className="min-h-screen bg-slate-50 p-8 z-10 relative overflow-hidden">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
@@ -363,7 +368,8 @@ export default function DashboardAdmin() {
                       </div>
                     </div>
 
-                    <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ zIndex: -999, opacity: 0 }}>
+                    {/* Contenedor desplazado fuera de la pantalla */}
+                    <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
                       <div 
                         id={`tarjeta-pdf-${qr.patente}`} 
                         className="bg-white p-8 flex flex-col items-center justify-center"
