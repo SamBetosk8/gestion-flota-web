@@ -27,7 +27,6 @@ export default function DashboardAdmin() {
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
 
-  // Conversion de logo JPG a PNG Base64
   useEffect(() => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -38,11 +37,10 @@ export default function DashboardAdmin() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0);
-        // Mantenemos la conversion a PNG para compatibilidad
         setLogoBase64(canvas.toDataURL('image/png'));
       }
     };
-    img.src = '/logo.jpg'; // Ruta actualizada a JPG
+    img.src = '/logo.jpg';
   }, []);
 
   useEffect(() => {
@@ -200,13 +198,14 @@ export default function DashboardAdmin() {
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
         
-        const nombreArchivo = `QR_${patente}.pdf`;
-        
+        const nombreArchivo = `QR_Vehiculo_${patente}.pdf`;
         const esCelular = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        const pdfBlob = pdf.output('blob');
+        const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
-        if (esCelular && navigator.canShare) {
-          const pdfBlob = pdf.output('blob');
-          const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+        // Correccion TypeScript TS2774
+        if (esCelular && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file] });
         } else {
           pdf.save(nombreArchivo);
@@ -375,7 +374,6 @@ export default function DashboardAdmin() {
                   <div key={qr.id} className="flex flex-col gap-2 relative">
                     
                     <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
-                      {/* Fallback visible apuntando a JPG */}
                       <img src="/logo.jpg" alt="Logo" className="h-12 object-contain mx-auto mb-4" />
                       <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
                       <p className="text-xs text-slate-500 font-bold uppercase mb-4">Control de Flota</p>
@@ -390,7 +388,6 @@ export default function DashboardAdmin() {
                         className="bg-white p-8 flex flex-col items-center justify-center"
                         style={{ width: '400px', height: '600px', backgroundColor: 'white' }} 
                       >
-                        {/* Se usa el logo procesado; fallback ahora es /logo.jpg */}
                         {logoBase64 && <img src={logoBase64} alt="Logo Empresa" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
                         {!logoBase64 && <img src="/logo.jpg" alt="Logo Fallback" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
                         <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>

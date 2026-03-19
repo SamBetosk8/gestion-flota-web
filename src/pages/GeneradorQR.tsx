@@ -12,10 +12,9 @@ export default function GeneradorQR() {
   const [logoBase64, setLogoBase64] = useState<string>(''); 
   const urlVehiculo = `${window.location.origin}/v/${patente}`;
 
-  // Actualizado para cargar logo.jpg y convertirlo a PNG Base64
   useEffect(() => {
     const img = new Image();
-    img.crossOrigin = "anonymous"; // Importante para Vercel
+    img.crossOrigin = "anonymous";
     img.onload = () => {
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
@@ -23,11 +22,10 @@ export default function GeneradorQR() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0);
-        // Aunque el original sea JPG, lo convertimos a PNG para maxima compatibilidad en PDF
         setLogoBase64(canvas.toDataURL('image/png'));
       }
     };
-    img.src = '/logo.jpg'; // Ruta actualizada a JPG
+    img.src = '/logo.jpg';
   }, []);
 
   const guardarYDescargar = async () => {
@@ -63,12 +61,13 @@ export default function GeneradorQR() {
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
         
         const nombreArchivo = `QR_${patenteMayuscula}.pdf`;
-        
         const esCelular = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        const pdfBlob = pdf.output('blob');
+        const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
-        if (esCelular && navigator.canShare) {
-          const pdfBlob = pdf.output('blob');
-          const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+        // Correccion TypeScript TS2774
+        if (esCelular && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file] });
         } else {
           pdf.save(nombreArchivo);
@@ -88,7 +87,6 @@ export default function GeneradorQR() {
       
       <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -50, pointerEvents: 'none' }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
-          {/* Se usa el logoBase64 procesado; el fallback ahora es /logo.jpg */}
           {logoBase64 && <img src={logoBase64} alt="Logo Empresa" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
           {!logoBase64 && <img src="/logo.jpg" alt="Logo Fallback" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase() || 'PATENTE'}</h2>
