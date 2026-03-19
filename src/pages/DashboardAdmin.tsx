@@ -187,8 +187,7 @@ export default function DashboardAdmin() {
 
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({
-            files: [file],
-            title: `QR Vehiculo ${patente}`
+            files: [file]
           });
         } else {
           pdf.save(nombreArchivo);
@@ -365,13 +364,13 @@ export default function DashboardAdmin() {
                       </div>
                     </div>
 
-                    <div style={{ position: 'fixed', top: '200vh', left: '-9999px' }}>
+                    <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -100, opacity: 0, pointerEvents: 'none' }}>
                       <div 
                         id={`tarjeta-pdf-${qr.patente}`} 
                         className="bg-white p-8 flex flex-col items-center justify-center"
                         style={{ width: '400px', height: '600px', backgroundColor: 'white' }} 
                       >
-                        <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
+                        <img src="/logo.webp" alt="Logo Empresa" crossOrigin="anonymous" className="h-24 object-contain mx-auto mb-8" />
                         <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
                         <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
                         <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">

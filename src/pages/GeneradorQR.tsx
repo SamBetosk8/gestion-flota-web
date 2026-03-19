@@ -31,10 +31,8 @@ export default function GeneradorQR() {
 
       const elemento = document.getElementById('tarjeta-pdf-generador');
       if (elemento) {
-        // Truco para Safari/iOS: Primer render en vacio para forzar la carga del logo en memoria
         await toPng(elemento, { cacheBust: true, pixelRatio: 1 });
 
-        // Segundo render real
         const imgData = await toPng(elemento, { 
           quality: 1, 
           pixelRatio: 3,
@@ -45,19 +43,16 @@ export default function GeneradorQR() {
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
         
-        // Logica de descarga adaptativa (Celular vs PC)
         const nombreArchivo = `QR_${patenteMayuscula}.pdf`;
         const pdfBlob = pdf.output('blob');
         const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          // Si es celular, abre el menu nativo para compartir/guardar
+          // Solo enviamos el archivo, sin titulo, para evitar el .txt en iOS
           await navigator.share({
-            files: [file],
-            title: `QR Vehiculo ${patenteMayuscula}`
+            files: [file]
           });
         } else {
-          // Si es PC, descarga directo
           pdf.save(nombreArchivo);
         }
       }
@@ -73,9 +68,10 @@ export default function GeneradorQR() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       
-      <div style={{ position: 'fixed', top: '200vh', left: '-9999px' }}>
+      {/* Contenedor invisible pero en pantalla para forzar la carga del logo */}
+      <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -100, opacity: 0, pointerEvents: 'none' }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
-          <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
+          <img src="/logo.webp" alt="Logo Empresa" crossOrigin="anonymous" className="h-24 object-contain mx-auto mb-8" />
           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase() || 'PATENTE'}</h2>
           <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
           <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
