@@ -358,7 +358,7 @@ export default function DashboardAdmin() {
               </form>
               <div className="mt-8 pt-6 border-t border-slate-100">
                 <button onClick={sincronizarQRsAntiguos} disabled={sincronizando} className="w-full bg-indigo-50 text-indigo-700 font-bold py-3 rounded-xl hover:bg-indigo-100 transition-all text-sm border border-indigo-200">
-                  {sincronizando ? 'Sincronizando...' : '🔄 Sincronizar QRs Antiguos'}
+                  {sincronizando ? 'Sincronizando...' : 'Sincronizar QRs Antiguos'}
                 </button>
                 <p className="text-xs text-slate-400 text-center mt-2">Busca QRs guardados y los agrega aquí automáticamente.</p>
               </div>
@@ -473,7 +473,7 @@ export default function DashboardAdmin() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="fecha" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
                     <YAxis tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val} km`} />
-                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: number) => [`${value} km recorridos`, 'Variación']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
+                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variación']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
                     <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
                     <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Día" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
                   </LineChart>
