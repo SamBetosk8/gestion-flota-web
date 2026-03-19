@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 
@@ -10,6 +10,31 @@ export default function VistaConductor() {
   const [bloqueado, setBloqueado] = useState(false);
   const [foto, setFoto] = useState<string | null>(null);
   const [subiendo, setSubiendo] = useState(false);
+  
+  // Estados para la carga de datos del vehiculo
+  const [vehiculo, setVehiculo] = useState<any>(null);
+  const [cargandoVehiculo, setCargandoVehiculo] = useState(true);
+
+  // Buscar informacion del vehiculo para ver estado de documentos
+  useEffect(() => {
+    const cargarVehiculo = async () => {
+      if (!id) return;
+      try {
+        const patenteFiltro = id.toUpperCase();
+        const q = query(collection(db, 'vehiculos'), where('patente', '==', patenteFiltro));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          setVehiculo(querySnapshot.docs[0].data());
+        }
+      } catch (error) {
+        console.error("Error al cargar vehiculo:", error);
+      } finally {
+        setCargandoVehiculo(false);
+      }
+    };
+    cargarVehiculo();
+  }, [id]);
 
   const preguntas = [
     { id: 'frenos', texto: '¿Los frenos funcionan correctamente?' },
@@ -74,6 +99,19 @@ export default function VistaConductor() {
     }
   };
 
+  // Funcion para evaluar colores segun fecha
+  const calcularEstadoVencimiento = (fechaString: string) => {
+    if (!fechaString) return { texto: 'No registrado', clase: 'text-slate-500 bg-slate-100 border-slate-200' };
+    const fechaVencimiento = new Date(fechaString);
+    const hoy = new Date();
+    const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
+    const diasRestantes = Math.ceil(diferenciaTiempo / (1000 * 3600 * 24));
+
+    if (diasRestantes < 0) return { texto: 'Vencido', clase: 'bg-red-100 text-red-700 border-red-200' };
+    if (diasRestantes <= 10) return { texto: 'Por vencer', clase: 'bg-orange-100 text-orange-700 border-orange-200' };
+    return { texto: 'Al día', clase: 'bg-green-100 text-green-700 border-green-200' };
+  };
+
   if (bloqueado) {
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4 text-center">
@@ -101,7 +139,35 @@ export default function VistaConductor() {
       <div className="max-w-md mx-auto bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
         <div className="bg-blue-600 p-6 text-white text-center">
           <h1 className="text-xl font-bold">Checklist Diario</h1>
-          <p className="text-blue-100">Vehiculo: {id}</p>
+          <p className="text-blue-100 font-mono text-lg mt-1 tracking-widest">{id}</p>
+        </div>
+
+        {/* SECCION ESTADO DE DOCUMENTOS */}
+        <div className="p-4 bg-slate-50 border-b border-slate-200">
+          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Estado de Documentos</h2>
+          
+          {cargandoVehiculo ? (
+            <p className="text-center text-xs text-slate-500">Verificando en base de datos...</p>
+          ) : vehiculo ? (
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className={`p-2 rounded-xl border flex flex-col justify-center items-center ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
+                <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
+                <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
+              </div>
+              <div className={`p-2 rounded-xl border flex flex-col justify-center items-center ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
+                <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
+                <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
+              </div>
+              <div className={`p-2 rounded-xl border flex flex-col justify-center items-center ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
+                <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
+                <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-center">
+              <p className="text-xs text-red-600 font-bold">⚠️ Vehículo no registrado en la gestión de flota.</p>
+            </div>
+          )}
         </div>
 
         <form onSubmit={manejarEnvio} className="p-6 space-y-6">
@@ -117,7 +183,7 @@ export default function VistaConductor() {
               <label className="block w-full cursor-pointer">
                 <input type="file" accept="image/*" capture="environment" onChange={capturarFoto} className="hidden" />
                 <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-4 text-center hover:bg-slate-100 transition-all">
-                  {foto ? <img src={foto} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Presiona para usar la camara</span>}
+                  {foto ? <img src={foto} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Presiona para usar la cámara</span>}
                 </div>
               </label>
             </div>
