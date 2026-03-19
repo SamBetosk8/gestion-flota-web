@@ -1,0 +1,117 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
+
+export default function GeneradorQR() {
+  const [patente, setPatente] = useState('HBL123');
+  const [procesando, setProcesando] = useState(false);
+  const urlVehiculo = `${window.location.origin}/v/${patente}`;
+
+  const guardarYDescargar = async () => {
+    if (!patente) return;
+    setProcesando(true);
+    
+    try {
+      const patenteMayuscula = patente.toUpperCase();
+      
+      const q = query(collection(db, 'qrs_guardados'), where('patente', '==', patenteMayuscula));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        await addDoc(collection(db, 'qrs_guardados'), {
+          patente: patenteMayuscula,
+          url: urlVehiculo,
+          fechaRegistro: serverTimestamp()
+        });
+      }
+
+      const elemento = document.getElementById('tarjeta-pdf-generador');
+      if (elemento) {
+        // Truco para Safari/iOS: Primer render en vacio para forzar la carga del logo en memoria
+        await toPng(elemento, { cacheBust: true, pixelRatio: 1 });
+
+        // Segundo render real
+        const imgData = await toPng(elemento, { 
+          quality: 1, 
+          pixelRatio: 3,
+          backgroundColor: '#ffffff',
+          cacheBust: true
+        });
+
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
+        pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
+        
+        // Logica de descarga adaptativa (Celular vs PC)
+        const nombreArchivo = `QR_${patenteMayuscula}.pdf`;
+        const pdfBlob = pdf.output('blob');
+        const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          // Si es celular, abre el menu nativo para compartir/guardar
+          await navigator.share({
+            files: [file],
+            title: `QR Vehiculo ${patenteMayuscula}`
+          });
+        } else {
+          // Si es PC, descarga directo
+          pdf.save(nombreArchivo);
+        }
+      }
+
+    } catch (error) {
+      console.error("Error al procesar:", error);
+      alert("Hubo un error al procesar el QR.");
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      
+      <div style={{ position: 'fixed', top: '200vh', left: '-9999px' }}>
+        <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
+          <img src="/logo.webp" alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
+          <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase() || 'PATENTE'}</h2>
+          <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
+          <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
+            <QRCodeSVG value={urlVehiculo} size={220} level="H" includeMargin={false} />
+          </div>
+          <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar<br/>el checklist de este vehiculo.</p>
+        </div>
+      </div>
+
+      <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full text-center border border-slate-100 z-10 relative">
+        <h2 className="text-2xl font-black text-slate-800 mb-2">Generador QR</h2>
+        <p className="text-slate-500 mb-8 text-sm">Identificadores de Vehiculos</p>
+        
+        <div className="mb-8 text-left">
+          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Patente / ID</label>
+          <input type="text" value={patente} onChange={(e) => setPatente(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all font-mono text-lg text-center" placeholder="EJ: ABCD12" />
+        </div>
+
+        <div className="flex justify-center bg-white p-6 border-4 border-slate-50 rounded-3xl mb-8 shadow-inner">
+          <QRCodeSVG value={urlVehiculo} size={180} level="H" includeMargin={false} />
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <button 
+            onClick={guardarYDescargar} 
+            disabled={procesando} 
+            className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${procesando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+          >
+            {procesando ? 'Procesando...' : 'Guardar y Descargar PDF'}
+          </button>
+          
+          <Link to="/admin" className="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors mt-2">
+            Ver Panel Admin
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
