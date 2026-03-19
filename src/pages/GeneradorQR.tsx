@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
@@ -9,7 +9,24 @@ import { jsPDF } from 'jspdf';
 export default function GeneradorQR() {
   const [patente, setPatente] = useState('HBL123');
   const [procesando, setProcesando] = useState(false);
+  const [logoBase64, setLogoBase64] = useState<string>(''); // Nuevo estado para el logo
   const urlVehiculo = `${window.location.origin}/v/${patente}`;
+
+  // Convertimos el logo a texto Base64 al cargar la pagina para engañar a Safari
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const response = await fetch('/logo.webp');
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => setLogoBase64(reader.result as string);
+        reader.readAsDataURL(blob);
+      } catch (error) {
+        console.error("Error al convertir logo a base64:", error);
+      }
+    };
+    fetchLogo();
+  }, []);
 
   const guardarYDescargar = async () => {
     if (!patente) return;
@@ -48,7 +65,6 @@ export default function GeneradorQR() {
         const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          // Solo enviamos el archivo, sin titulo, para evitar el .txt en iOS
           await navigator.share({
             files: [file]
           });
@@ -68,10 +84,10 @@ export default function GeneradorQR() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       
-      {/* Contenedor invisible pero en pantalla para forzar la carga del logo */}
       <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -100, opacity: 0, pointerEvents: 'none' }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
-          <img src="/logo.webp" alt="Logo Empresa" crossOrigin="anonymous" className="h-24 object-contain mx-auto mb-8" />
+          {/* Usamos el logo ya procesado en base64 */}
+          <img src={logoBase64 || '/logo.webp'} alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase() || 'PATENTE'}</h2>
           <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
           <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
@@ -97,10 +113,10 @@ export default function GeneradorQR() {
         <div className="flex flex-col gap-4">
           <button 
             onClick={guardarYDescargar} 
-            disabled={procesando} 
-            className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${procesando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+            disabled={procesando || !logoBase64} // Evitamos descargar si el logo aun no esta listo
+            className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${(procesando || !logoBase64) ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
           >
-            {procesando ? 'Procesando...' : 'Guardar y Descargar PDF'}
+            {procesando ? 'Procesando...' : (!logoBase64 ? 'Cargando imagen...' : 'Guardar y Descargar PDF')}
           </button>
           
           <Link to="/admin" className="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors mt-2">

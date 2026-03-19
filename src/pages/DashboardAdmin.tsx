@@ -9,6 +9,7 @@ import { jsPDF } from 'jspdf';
 export default function DashboardAdmin() {
   const [pestanaActiva, setPestanaActiva] = useState('reportes');
   const [busqueda, setBusqueda] = useState('');
+  const [logoBase64, setLogoBase64] = useState<string>(''); // Nuevo estado para el logo
   
   const [reportes, setReportes] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
@@ -25,6 +26,22 @@ export default function DashboardAdmin() {
 
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
+
+  // Convertir logo a base64
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const response = await fetch('/logo.webp');
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => setLogoBase64(reader.result as string);
+        reader.readAsDataURL(blob);
+      } catch (error) {
+        console.error("Error al convertir logo a base64:", error);
+      }
+    };
+    fetchLogo();
+  }, []);
 
   useEffect(() => {
     if (pestanaActiva === 'reportes') {
@@ -370,7 +387,8 @@ export default function DashboardAdmin() {
                         className="bg-white p-8 flex flex-col items-center justify-center"
                         style={{ width: '400px', height: '600px', backgroundColor: 'white' }} 
                       >
-                        <img src="/logo.webp" alt="Logo Empresa" crossOrigin="anonymous" className="h-24 object-contain mx-auto mb-8" />
+                        {/* Usamos el logo procesado en base64 */}
+                        <img src={logoBase64 || '/logo.webp'} alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
                         <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
                         <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
                         <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
@@ -380,8 +398,8 @@ export default function DashboardAdmin() {
                       </div>
                     </div>
 
-                    <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2">
-                      {generandoPdf === qr.patente ? 'Generando...' : 'Descargar en PDF'}
+                    <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente || !logoBase64} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2">
+                      {generandoPdf === qr.patente ? 'Generando...' : (!logoBase64 ? 'Cargando imagen...' : 'Descargar en PDF')}
                     </button>
                     
                     <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors">
