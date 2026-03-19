@@ -9,23 +9,25 @@ import { jsPDF } from 'jspdf';
 export default function GeneradorQR() {
   const [patente, setPatente] = useState('HBL123');
   const [procesando, setProcesando] = useState(false);
-  const [logoBase64, setLogoBase64] = useState<string>(''); // Nuevo estado para el logo
+  const [logoBase64, setLogoBase64] = useState<string>(''); 
   const urlVehiculo = `${window.location.origin}/v/${patente}`;
 
-  // Convertimos el logo a texto Base64 al cargar la pagina para engañar a Safari
+  // Actualizado para cargar logo.jpg y convertirlo a PNG Base64
   useEffect(() => {
-    const fetchLogo = async () => {
-      try {
-        const response = await fetch('/logo.webp');
-        const blob = await response.blob();
-        const reader = new FileReader();
-        reader.onloadend = () => setLogoBase64(reader.result as string);
-        reader.readAsDataURL(blob);
-      } catch (error) {
-        console.error("Error al convertir logo a base64:", error);
+    const img = new Image();
+    img.crossOrigin = "anonymous"; // Importante para Vercel
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        // Aunque el original sea JPG, lo convertimos a PNG para maxima compatibilidad en PDF
+        setLogoBase64(canvas.toDataURL('image/png'));
       }
     };
-    fetchLogo();
+    img.src = '/logo.jpg'; // Ruta actualizada a JPG
   }, []);
 
   const guardarYDescargar = async () => {
@@ -61,13 +63,13 @@ export default function GeneradorQR() {
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
         
         const nombreArchivo = `QR_${patenteMayuscula}.pdf`;
-        const pdfBlob = pdf.output('blob');
-        const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+        
+        const esCelular = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file]
-          });
+        if (esCelular && navigator.canShare) {
+          const pdfBlob = pdf.output('blob');
+          const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+          await navigator.share({ files: [file] });
         } else {
           pdf.save(nombreArchivo);
         }
@@ -82,12 +84,13 @@ export default function GeneradorQR() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden z-10">
       
-      <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -100, opacity: 0, pointerEvents: 'none' }}>
+      <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -50, pointerEvents: 'none' }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
-          {/* Usamos el logo ya procesado en base64 */}
-          <img src={logoBase64 || '/logo.webp'} alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
+          {/* Se usa el logoBase64 procesado; el fallback ahora es /logo.jpg */}
+          {logoBase64 && <img src={logoBase64} alt="Logo Empresa" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
+          {!logoBase64 && <img src="/logo.jpg" alt="Logo Fallback" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase() || 'PATENTE'}</h2>
           <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
           <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
@@ -97,7 +100,7 @@ export default function GeneradorQR() {
         </div>
       </div>
 
-      <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full text-center border border-slate-100 z-10 relative">
+      <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full text-center border border-slate-100 relative">
         <h2 className="text-2xl font-black text-slate-800 mb-2">Generador QR</h2>
         <p className="text-slate-500 mb-8 text-sm">Identificadores de Vehiculos</p>
         
@@ -113,10 +116,10 @@ export default function GeneradorQR() {
         <div className="flex flex-col gap-4">
           <button 
             onClick={guardarYDescargar} 
-            disabled={procesando || !logoBase64} // Evitamos descargar si el logo aun no esta listo
+            disabled={procesando || !logoBase64} 
             className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${(procesando || !logoBase64) ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
           >
-            {procesando ? 'Procesando...' : (!logoBase64 ? 'Cargando imagen...' : 'Guardar y Descargar PDF')}
+            {procesando ? 'Procesando...' : (!logoBase64 ? 'Cargando sistema...' : 'Guardar y Descargar PDF')}
           </button>
           
           <Link to="/admin" className="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors mt-2">

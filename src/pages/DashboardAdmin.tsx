@@ -9,7 +9,7 @@ import { jsPDF } from 'jspdf';
 export default function DashboardAdmin() {
   const [pestanaActiva, setPestanaActiva] = useState('reportes');
   const [busqueda, setBusqueda] = useState('');
-  const [logoBase64, setLogoBase64] = useState<string>(''); // Nuevo estado para el logo
+  const [logoBase64, setLogoBase64] = useState<string>('');
   
   const [reportes, setReportes] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
@@ -27,20 +27,22 @@ export default function DashboardAdmin() {
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
 
-  // Convertir logo a base64
+  // Conversion de logo JPG a PNG Base64
   useEffect(() => {
-    const fetchLogo = async () => {
-      try {
-        const response = await fetch('/logo.webp');
-        const blob = await response.blob();
-        const reader = new FileReader();
-        reader.onloadend = () => setLogoBase64(reader.result as string);
-        reader.readAsDataURL(blob);
-      } catch (error) {
-        console.error("Error al convertir logo a base64:", error);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        // Mantenemos la conversion a PNG para compatibilidad
+        setLogoBase64(canvas.toDataURL('image/png'));
       }
     };
-    fetchLogo();
+    img.src = '/logo.jpg'; // Ruta actualizada a JPG
   }, []);
 
   useEffect(() => {
@@ -198,14 +200,14 @@ export default function DashboardAdmin() {
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
         
-        const nombreArchivo = `QR_Vehiculo_${patente}.pdf`;
-        const pdfBlob = pdf.output('blob');
-        const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+        const nombreArchivo = `QR_${patente}.pdf`;
+        
+        const esCelular = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file]
-          });
+        if (esCelular && navigator.canShare) {
+          const pdfBlob = pdf.output('blob');
+          const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+          await navigator.share({ files: [file] });
         } else {
           pdf.save(nombreArchivo);
         }
@@ -222,7 +224,7 @@ export default function DashboardAdmin() {
   const qrsFiltrados = qrsGuardados.filter(q => q.patente?.toLowerCase().includes(busqueda.toLowerCase()));
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
+    <div className="min-h-screen bg-slate-50 p-8 z-10 relative">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
@@ -370,10 +372,11 @@ export default function DashboardAdmin() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {qrsFiltrados.map((qr) => (
-                  <div key={qr.id} className="flex flex-col gap-2">
+                  <div key={qr.id} className="flex flex-col gap-2 relative">
                     
                     <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
-                      <img src="/logo.webp" alt="Logo" className="h-12 object-contain mx-auto mb-4" />
+                      {/* Fallback visible apuntando a JPG */}
+                      <img src="/logo.jpg" alt="Logo" className="h-12 object-contain mx-auto mb-4" />
                       <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
                       <p className="text-xs text-slate-500 font-bold uppercase mb-4">Control de Flota</p>
                       <div className="bg-white p-2 rounded-xl border-4 border-slate-800 mb-4 shadow-sm">
@@ -381,14 +384,15 @@ export default function DashboardAdmin() {
                       </div>
                     </div>
 
-                    <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -100, opacity: 0, pointerEvents: 'none' }}>
+                    <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -50, pointerEvents: 'none' }}>
                       <div 
                         id={`tarjeta-pdf-${qr.patente}`} 
                         className="bg-white p-8 flex flex-col items-center justify-center"
                         style={{ width: '400px', height: '600px', backgroundColor: 'white' }} 
                       >
-                        {/* Usamos el logo procesado en base64 */}
-                        <img src={logoBase64 || '/logo.webp'} alt="Logo Empresa" className="h-24 object-contain mx-auto mb-8" />
+                        {/* Se usa el logo procesado; fallback ahora es /logo.jpg */}
+                        {logoBase64 && <img src={logoBase64} alt="Logo Empresa" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
+                        {!logoBase64 && <img src="/logo.jpg" alt="Logo Fallback" style={{ height: '96px', objectFit: 'contain', marginBottom: '32px' }} />}
                         <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
                         <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">Control de Flota</p>
                         <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
@@ -398,11 +402,11 @@ export default function DashboardAdmin() {
                       </div>
                     </div>
 
-                    <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente || !logoBase64} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2">
+                    <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente || !logoBase64} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg mt-2 relative z-10">
                       {generandoPdf === qr.patente ? 'Generando...' : (!logoBase64 ? 'Cargando imagen...' : 'Descargar en PDF')}
                     </button>
                     
-                    <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors">
+                    <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10">
                       Eliminar QR
                     </button>
                   </div>
