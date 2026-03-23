@@ -12,8 +12,11 @@ export default function DashboardAdmin() {
   const [pestanaActiva, setPestanaActiva] = useState('reportes');
   const [busqueda, setBusqueda] = useState('');
   
+  const [filtroEstado, setFiltroEstado] = useState('todos'); 
+  
   const [reportes, setReportes] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
+  const [reporteSeleccionado, setReporteSeleccionado] = useState<any | null>(null);
   
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [guardandoVehiculo, setGuardandoVehiculo] = useState(false);
@@ -89,7 +92,7 @@ export default function DashboardAdmin() {
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
-        const confirmar = window.confirm("Este vehiculo ya esta registrado. ¿Deseas actualizar sus fechas de vencimiento?");
+        const confirmar = window.confirm("Este vehiculo ya esta registrado. Deseas actualizar sus fechas de vencimiento?");
         if (confirmar) {
           const idVehiculoExistente = querySnapshot.docs[0].id;
           await updateDoc(doc(db, 'vehiculos', idVehiculoExistente), {
@@ -124,7 +127,7 @@ export default function DashboardAdmin() {
   };
 
   const sincronizarQRsAntiguos = async () => {
-    const confirmar = window.confirm("¿Quieres buscar QRs antiguos que no esten en tu lista de vehiculos y agregarlos automaticamente?");
+    const confirmar = window.confirm("Quieres buscar QRs antiguos que no esten en tu lista de vehiculos y agregarlos automaticamente?");
     if (!confirmar) return;
 
     setSincronizando(true);
@@ -151,13 +154,13 @@ export default function DashboardAdmin() {
       }
 
       if (agregados > 0) {
-        alert(`Sincronizacion exitosa. Se agregaron ${agregados} vehiculos nuevos desde los QRs.`);
+        alert("Sincronizacion exitosa. Se agregaron vehiculos nuevos desde los QRs.");
         cargarVehiculos();
       } else {
         alert("Todo esta al dia. No hay QRs antiguos que falten en la lista de vehiculos.");
       }
     } catch (error) {
-      console.error("Error al sincronizar:", error);
+      console.error(error);
       alert("Hubo un error al sincronizar.");
     } finally {
       setSincronizando(false);
@@ -175,7 +178,7 @@ export default function DashboardAdmin() {
   };
 
   const eliminarVehiculo = async (id: string) => {
-    const confirmar = window.confirm("¿Estas seguro de que deseas eliminar este vehiculo del sistema?");
+    const confirmar = window.confirm("Estas seguro de que deseas eliminar este vehiculo del sistema?");
     if (confirmar) {
       try {
         await deleteDoc(doc(db, 'vehiculos', id));
@@ -187,7 +190,7 @@ export default function DashboardAdmin() {
   };
 
   const eliminarQR = async (id: string) => {
-    const confirmar = window.confirm("¿Estas seguro de que deseas eliminar este QR guardado?");
+    const confirmar = window.confirm("Estas seguro de que deseas eliminar este QR guardado?");
     if (confirmar) {
       try {
         await deleteDoc(doc(db, 'qrs_guardados', id));
@@ -208,7 +211,7 @@ export default function DashboardAdmin() {
 
     if (diasRestantes < 0) return { texto: `Vencido (${Math.abs(diasRestantes)}d)`, clase: 'bg-red-100 text-red-700 font-bold border-red-200' };
     if (diasRestantes <= 10) return { texto: `Vence en ${diasRestantes}d`, clase: 'bg-orange-100 text-orange-700 font-bold border-orange-200' };
-    return { texto: `OK`, clase: 'bg-green-100 text-green-700 font-bold border-green-200' };
+    return { texto: 'OK', clase: 'bg-green-100 text-green-700 font-bold border-green-200' };
   };
 
   const descargarPDF = async (patente: string) => {
@@ -249,12 +252,21 @@ export default function DashboardAdmin() {
     setGenerandoPdf(null);
   };
 
-  const reportesFiltrados = reportes.filter(r => r.vehiculoId?.toLowerCase().includes(busqueda.toLowerCase()));
+  const reportesFiltrados = reportes.filter(r => {
+    const coincidePatente = r.vehiculoId?.toLowerCase().includes(busqueda.toLowerCase());
+    let coincideEstado = true;
+    if (filtroEstado === 'aprobados') coincideEstado = !r.fallaCritica;
+    if (filtroEstado === 'bloqueados') coincideEstado = r.fallaCritica;
+    return coincidePatente && coincideEstado;
+  });
+
   const vehiculosFiltrados = vehiculos.filter(v => v.patente?.toLowerCase().includes(busqueda.toLowerCase()));
   const qrsFiltrados = qrsGuardados.filter(q => q.patente?.toLowerCase().includes(busqueda.toLowerCase()));
 
-  const datosGrafico = useMemo(() => {
-    if (!vehiculoEstadistica) return [];
+  // Logica avanzada para agrupar por dias y extraer KPIs
+  const estadisticas = useMemo(() => {
+    if (!vehiculoEstadistica) return { datos: [], kpis: null };
+
     const reportesVehiculo = [...reportes]
       .filter(r => r.vehiculoId === vehiculoEstadistica && r.kilometraje !== "No ingresado")
       .sort((a, b) => {
@@ -263,24 +275,70 @@ export default function DashboardAdmin() {
         return fechaA - fechaB;
       });
 
-    if (reportesVehiculo.length < 2) return [];
+    if (reportesVehiculo.length < 2) return { datos: [], kpis: null };
+
+    // Agrupar por dia (dd/mm), tomando el kilometraje maximo registrado ese dia
+    const registroPorDia: Record<string, { maxKm: number, timestamp: number }> = {};
+    
+    reportesVehiculo.forEach(rep => {
+      const fechaObj = rep.fecha?.toDate();
+      if (!fechaObj) return;
+      
+      const fechaStr = `${fechaObj.getDate()}/${fechaObj.getMonth() + 1}`;
+      const kms = Number(rep.kilometraje);
+
+      if (!isNaN(kms)) {
+        if (!registroPorDia[fechaStr] || kms > registroPorDia[fechaStr].maxKm) {
+          registroPorDia[fechaStr] = { maxKm: kms, timestamp: fechaObj.getTime() };
+        }
+      }
+    });
+
+    // Ordenar los dias cronologicamente
+    const diasOrdenados = Object.keys(registroPorDia)
+      .map(fecha => ({
+        fecha,
+        maxKm: registroPorDia[fecha].maxKm,
+        timestamp: registroPorDia[fecha].timestamp
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp);
 
     const datos = [];
-    for (let i = 1; i < reportesVehiculo.length; i++) {
-      const actualKms = Number(reportesVehiculo[i].kilometraje);
-      const anteriorKms = Number(reportesVehiculo[i - 1].kilometraje);
-      let diferencia = actualKms - anteriorKms;
-      if (diferencia < 0) diferencia = 0; 
-      const fechaObj = reportesVehiculo[i].fecha?.toDate();
-      const fechaFormateada = fechaObj ? `${fechaObj.getDate()}/${fechaObj.getMonth() + 1}` : `Rep ${i}`;
+    let totalKms = 0;
+    let maxDia = { fecha: '-', kms: 0 };
+
+    // Calcular las diferencias entre cada dia
+    for (let i = 1; i < diasOrdenados.length; i++) {
+      let diferencia = diasOrdenados[i].maxKm - diasOrdenados[i - 1].maxKm;
+      if (diferencia < 0) diferencia = 0; // Prevenir errores de digitacion en base de datos
 
       datos.push({
-        fecha: fechaFormateada,
+        fecha: diasOrdenados[i].fecha,
         kmsRecorridos: diferencia,
-        kilometrajeTotal: actualKms
+        kilometrajeTotal: diasOrdenados[i].maxKm
       });
     }
-    return datos.slice(-15);
+
+    // Tomar solo los ultimos 15 dias para la grafica y KPIs
+    const ultimos15 = datos.slice(-15);
+
+    ultimos15.forEach(d => {
+      totalKms += d.kmsRecorridos;
+      if (d.kmsRecorridos > maxDia.kms) {
+        maxDia = { fecha: d.fecha, kms: d.kmsRecorridos };
+      }
+    });
+
+    const promedio = ultimos15.length > 0 ? Math.round(totalKms / ultimos15.length) : 0;
+
+    return {
+      datos: ultimos15,
+      kpis: {
+        total: totalKms,
+        promedio: promedio,
+        maximo: maxDia
+      }
+    };
   }, [reportes, vehiculoEstadistica]);
 
   const vehiculosConReportes = Array.from(new Set(reportes.filter(r => r.vehiculoId).map(r => r.vehiculoId)));
@@ -312,25 +370,37 @@ export default function DashboardAdmin() {
         {/* CONTENIDO REPORTES */}
         {pestanaActiva === 'reportes' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
+            <div className="p-6 bg-slate-50 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h2 className="text-xl font-bold text-slate-800">Registros Diarios</h2>
+              <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                <button onClick={() => setFiltroEstado('todos')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'todos' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Todos</button>
+                <button onClick={() => setFiltroEstado('aprobados')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'aprobados' ? 'bg-green-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Aprobados</button>
+                <button onClick={() => setFiltroEstado('bloqueados')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'bloqueados' ? 'bg-red-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Bloqueados</button>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-600 text-sm uppercase tracking-wider">
+                  <tr className="bg-white text-slate-600 text-sm uppercase tracking-wider border-b border-slate-100">
                     <th className="p-4 font-bold">Fecha</th>
                     <th className="p-4 font-bold">Patente</th>
                     <th className="p-4 font-bold">Kilometraje</th>
+                    <th className="p-4 font-bold text-center">Checklist</th>
                     <th className="p-4 font-bold">Estado</th>
                     <th className="p-4 font-bold text-center">Evidencia</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {cargandoReportes ? (<tr><td colSpan={5} className="p-8 text-center text-slate-400">Cargando reportes...</td></tr>) 
-                  : reportesFiltrados.length === 0 ? (<tr><td colSpan={5} className="p-8 text-center text-slate-400">No se encontraron reportes.</td></tr>) 
+                  {cargandoReportes ? (<tr><td colSpan={6} className="p-8 text-center text-slate-400">Cargando reportes...</td></tr>) 
+                  : reportesFiltrados.length === 0 ? (<tr><td colSpan={6} className="p-8 text-center text-slate-400">No se encontraron reportes.</td></tr>) 
                   : reportesFiltrados.map((rep) => (
                     <tr key={rep.id} className="hover:bg-slate-50">
                       <td className="p-4 text-slate-600 text-sm">{rep.fecha ? rep.fecha.toDate().toLocaleString() : 'Reciente'}</td>
                       <td className="p-4 font-bold text-slate-800">{rep.vehiculoId}</td>
                       <td className="p-4 text-slate-600 font-mono">{rep.kilometraje}</td>
+                      <td className="p-4 text-center">
+                        <button onClick={() => setReporteSeleccionado(rep)} className="text-xs font-bold px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-100">Ver Detalles</button>
+                      </td>
                       <td className="p-4">{rep.fallaCritica ? <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200">BLOQUEADO</span> : <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200">APROBADO</span>}</td>
                       <td className="p-4 text-center">{rep.fotoUrl ? <a href={rep.fotoUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-sm font-medium">Ver Foto</a> : <span className="text-slate-400 text-sm">Sin foto</span>}</td>
                     </tr>
@@ -341,11 +411,37 @@ export default function DashboardAdmin() {
           </div>
         )}
 
+        {/* VENTANA MODAL PARA DETALLES DEL CHECKLIST */}
+        {reporteSeleccionado && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
+              <h3 className="text-2xl font-black text-slate-800 mb-1 border-b border-slate-100 pb-4">Detalles del Checklist</h3>
+              <p className="text-sm text-slate-500 mb-6 mt-2">Vehiculo: <span className="font-bold text-slate-800 text-lg">{reporteSeleccionado.vehiculoId}</span></p>
+              
+              <div className="max-h-80 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                {reporteSeleccionado.respuestas ? (
+                  Object.entries(reporteSeleccionado.respuestas).map(([k, v]) => (
+                    <div key={k} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <span className="capitalize text-slate-700 font-medium text-sm">{k}</span>
+                      <span className={`font-black text-xs px-3 py-1 rounded-lg border ${String(v).toLowerCase() === 'no' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-green-100 text-green-700 border-green-200'}`}>
+                        {String(v).toUpperCase()}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500 text-center py-4">No hay respuestas registradas.</p>
+                )}
+              </div>
+              <button onClick={() => setReporteSeleccionado(null)} className="mt-8 w-full bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition-colors shadow-lg">Cerrar Detalles</button>
+            </div>
+          </div>
+        )}
+
         {/* CONTENIDO VEHICULOS */}
         {pestanaActiva === 'vehiculos' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
-              <h2 className="text-xl font-bold text-slate-800 mb-6">Añadir / Actualizar Vehiculo</h2>
+              <h2 className="text-xl font-bold text-slate-800 mb-6">Anadir / Actualizar Vehiculo</h2>
               <form onSubmit={registrarOActualizarVehiculo} className="space-y-4">
                 <div><label className="block text-sm font-medium text-slate-600 mb-1">Patente</label><input type="text" value={formVehiculo.patente} onChange={(e) => setFormVehiculo({...formVehiculo, patente: e.target.value})} required placeholder="Ej: AB1234" className="w-full p-3 border border-slate-300 rounded-xl uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" /></div>
                 <div><label className="block text-sm font-medium text-slate-600 mb-1">Vencimiento Rev. Tecnica</label><input type="date" value={formVehiculo.vencimientoRevision} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoRevision: e.target.value})} required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700" /></div>
@@ -360,7 +456,7 @@ export default function DashboardAdmin() {
                 <button onClick={sincronizarQRsAntiguos} disabled={sincronizando} className="w-full bg-indigo-50 text-indigo-700 font-bold py-3 rounded-xl hover:bg-indigo-100 transition-all text-sm border border-indigo-200">
                   {sincronizando ? 'Sincronizando...' : 'Sincronizar QRs Antiguos'}
                 </button>
-                <p className="text-xs text-slate-400 text-center mt-2">Busca QRs guardados y los agrega aquí automáticamente.</p>
+                <p className="text-xs text-slate-400 text-center mt-2">Busca QRs guardados y los agrega aqui automaticamente.</p>
               </div>
             </div>
             <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 xl:col-span-2">
@@ -409,7 +505,6 @@ export default function DashboardAdmin() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {qrsFiltrados.map((qr) => (
                   <div key={qr.id} className="flex flex-col gap-2 relative">
-                    
                     <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
                       <img src={LOGO_BASE64} alt="Logo" className="h-12 object-contain mx-auto mb-4" />
                       <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
@@ -418,7 +513,6 @@ export default function DashboardAdmin() {
                         <QRCodeSVG value={qr.url} size={130} level="H" includeMargin={false} />
                       </div>
                     </div>
-
                     <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
                       <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                         <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
@@ -427,22 +521,16 @@ export default function DashboardAdmin() {
                         <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
                           <QRCodeSVG value={qr.url} size={220} level="H" includeMargin={false} />
                         </div>
-                        <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar<br/>el checklist de este vehiculo.</p>
+                        <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar el checklist de este vehiculo.</p>
                       </div>
                     </div>
-
                     <div className="flex gap-2 w-full mt-2 relative z-10">
                       <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-sm">
                         {generandoPdf === qr.patente ? '...' : 'Descargar'}
                       </button>
-                      <a href={qr.url} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-sm">
-                        Probar
-                      </a>
+                      <a href={qr.url} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-sm">Probar</a>
                     </div>
-                    
-                    <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10 text-sm">
-                      Eliminar QR
-                    </button>
+                    <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10 text-sm">Eliminar QR</button>
                   </div>
                 ))}
               </div>
@@ -450,11 +538,14 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO ESTADISTICAS */}
+        {/* CONTENIDO ESTADISTICAS CON KPIS */}
         {pestanaActiva === 'estadisticas' && (
           <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-              <h2 className="text-xl font-bold text-slate-800">Variación de Kilometraje (Últimos 15 días)</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Variacion de Kilometraje</h2>
+                <p className="text-sm text-slate-500 mt-1">Ultimos 15 dias de registro</p>
+              </div>
               <div className="w-full sm:w-auto">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Vehiculo</label>
                 <select value={vehiculoEstadistica} onChange={(e) => setVehiculoEstadistica(e.target.value)} className="w-full sm:w-64 p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none font-bold text-slate-700">
@@ -462,22 +553,47 @@ export default function DashboardAdmin() {
                 </select>
               </div>
             </div>
-            {datosGrafico.length === 0 ? (
+
+            {estadisticas.datos.length === 0 ? (
               <div className="flex items-center justify-center h-64 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                <p className="text-slate-400 font-medium">Necesitas al menos 2 reportes diarios de este vehiculo para generar la gráfica.</p>
+                <p className="text-slate-400 font-medium">Necesitas reportes en al menos 2 dias distintos para generar la grafica.</p>
               </div>
             ) : (
-              <div className="h-80 w-full mt-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={datosGrafico} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="fecha" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
-                    <YAxis tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val} km`} />
-                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variación']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
-                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                    <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Día" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                
+                {/* GRAFICA */}
+                <div className="lg:col-span-3 h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={estadisticas.datos} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="fecha" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
+                      <YAxis tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val} km`} />
+                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variacion']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
+                      <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                      <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Dia" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* KPIS (DERECHA) */}
+                <div className="lg:col-span-1 flex flex-col gap-4">
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Periodo</p>
+                    <p className="text-3xl font-black text-slate-800">{estadisticas.kpis?.total.toLocaleString()} <span className="text-base font-medium text-slate-500">km</span></p>
+                  </div>
+                  
+                  <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
+                    <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Promedio Diario</p>
+                    <p className="text-3xl font-black text-blue-700">{estadisticas.kpis?.promedio.toLocaleString()} <span className="text-base font-medium text-blue-500">km</span></p>
+                  </div>
+                  
+                  <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
+                    <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-1">Pico Maximo</p>
+                    <p className="text-3xl font-black text-orange-700">{estadisticas.kpis?.maximo.kms.toLocaleString()} <span className="text-base font-medium text-orange-500">km</span></p>
+                    <p className="text-sm font-medium text-orange-600 mt-2">Registrado el {estadisticas.kpis?.maximo.fecha}</p>
+                  </div>
+                </div>
+
               </div>
             )}
           </div>
