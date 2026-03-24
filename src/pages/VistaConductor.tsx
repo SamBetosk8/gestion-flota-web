@@ -4,6 +4,25 @@ import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'fire
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 
+// Banco de preguntas dinámico según el tipo de vehículo
+const preguntasPorTipo = {
+  'Camion': [
+    { id: 'frenos_aire', texto: '¿La presión de los frenos de aire es correcta?' },
+    { id: 'acoplado', texto: '¿El acoplado o rampa está asegurado correctamente?' },
+    { id: 'neumaticos_camion', texto: '¿Los neumáticos (incluyendo repuesto) están en buen estado?' }
+  ],
+  'Tractor': [
+    { id: 'hidraulico', texto: '¿El sistema hidráulico no presenta fugas?' },
+    { id: 'implementos', texto: '¿Los implementos agrícolas están bien enganchados?' },
+    { id: 'luces_faena', texto: '¿Las luces de faena y baliza están operativas?' }
+  ],
+  'Camioneta': [
+    { id: 'frenos', texto: '¿Los frenos funcionan correctamente?' },
+    { id: 'luces', texto: '¿Las luces e intermitentes encienden?' },
+    { id: 'neumaticos', texto: '¿Neumáticos en buen estado?' }
+  ]
+};
+
 export default function VistaConductor() {
   const { id } = useParams();
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
@@ -34,11 +53,27 @@ export default function VistaConductor() {
     cargarVehiculo();
   }, [id]);
 
-  const preguntas = [
-    { id: 'frenos', texto: 'Los frenos funcionan correctamente?' },
-    { id: 'luces', texto: 'Las luces encienden?' },
-    { id: 'neumaticos', texto: 'Neumaticos en buen estado?' }
-  ];
+  const forzarDescarga = async (url: string, nombreArchivo: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const urlBlob = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = urlBlob;
+      a.download = nombreArchivo;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(urlBlob);
+    } catch (error) {
+      console.error("Error al descargar, abriendo en nueva pestaña:", error);
+      window.open(url, '_blank');
+    }
+  };
+
+  // Determinar qué preguntas usar. Si no tiene tipo, usa Camioneta por defecto.
+  const tipoActual = vehiculo?.tipo || 'Camioneta';
+  const preguntasDinamicas = preguntasPorTipo[tipoActual as keyof typeof preguntasPorTipo] || preguntasPorTipo['Camioneta'];
 
   const capturarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -62,7 +97,7 @@ export default function VistaConductor() {
     let tieneFallaCritica = false;
     const respuestas: Record<string, string> = {};
 
-    preguntas.forEach(p => {
+    preguntasDinamicas.forEach(p => {
       const respuesta = formData.get(p.id) as string;
       respuestas[p.id] = respuesta;
       if (respuesta === 'no') tieneFallaCritica = true;
@@ -81,9 +116,10 @@ export default function VistaConductor() {
 
       await addDoc(collection(db, 'reportes'), {
         vehiculoId: id,
+        tipoVehiculo: tipoActual, // Guardamos el tipo para el filtro del dashboard
         kilometraje: kilometrajeEscrito || "No ingresado",
         fotoUrl: fotoUrl,
-        fotoPath: fotoPath, // Guardamos la ruta exacta para borrarla en 15 dias
+        fotoPath: fotoPath,
         fallaCritica: tieneFallaCritica,
         respuestas: respuestas,
         fecha: serverTimestamp()
@@ -109,15 +145,15 @@ export default function VistaConductor() {
 
     if (diasRestantes < 0) return { texto: 'Vencido', clase: 'bg-red-100 text-red-700 border-red-200' };
     if (diasRestantes <= 10) return { texto: 'Por vencer', clase: 'bg-orange-100 text-orange-700 border-orange-200' };
-    return { texto: 'Al dia', clase: 'bg-green-100 text-green-700 border-green-200' };
+    return { texto: 'Al día', clase: 'bg-green-100 text-green-700 border-green-200' };
   };
 
   if (bloqueado) {
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4 text-center">
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500">
-          <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
-          <p className="mt-4 text-gray-600">Falla critica detectada. Avise al taller inmediatamente.</p>
+          <h1 className="text-2xl font-black text-red-700">VEHÍCULO BLOQUEADO</h1>
+          <p className="mt-4 text-gray-600">Falla crítica detectada. Avise al taller inmediatamente.</p>
         </div>
       </div>
     );
@@ -140,6 +176,9 @@ export default function VistaConductor() {
         <div className="bg-blue-600 p-6 text-white text-center">
           <h1 className="text-xl font-bold">Checklist Diario</h1>
           <p className="text-blue-100 font-mono text-lg mt-1 tracking-widest">{id}</p>
+          {!cargandoVehiculo && vehiculo?.tipo && (
+            <p className="text-white text-xs font-black uppercase mt-2 bg-blue-700 inline-block px-3 py-1 rounded-full">{vehiculo.tipo}</p>
+          )}
         </div>
 
         <div className="p-4 bg-slate-50 border-b border-slate-200">
@@ -148,38 +187,59 @@ export default function VistaConductor() {
           {cargandoVehiculo ? (
             <p className="text-center text-xs text-slate-500">Verificando en base de datos...</p>
           ) : vehiculo ? (
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className={`p-2 rounded-xl border flex flex-col justify-between items-center ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
-                <div className="flex flex-col items-center">
-                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
-                  <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
+                <div className="flex flex-col items-center w-full">
+                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Técnica</span>
+                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
                 </div>
                 {vehiculo.urlRevision && (
-                  <a href={vehiculo.urlRevision} target="_blank" rel="noreferrer" className="mt-2 text-[10px] font-bold bg-white text-slate-800 px-3 py-1 rounded shadow hover:bg-slate-200 transition-colors">Ver PDF</a>
+                  <button 
+                    type="button"
+                    onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${id}.pdf`)} 
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Descargar
+                  </button>
                 )}
               </div>
-              <div className={`p-2 rounded-xl border flex flex-col justify-between items-center ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
-                <div className="flex flex-col items-center">
+              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
+                <div className="flex flex-col items-center w-full">
                   <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
-                  <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
+                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
                 </div>
                 {vehiculo.urlCirculacion && (
-                  <a href={vehiculo.urlCirculacion} target="_blank" rel="noreferrer" className="mt-2 text-[10px] font-bold bg-white text-slate-800 px-3 py-1 rounded shadow hover:bg-slate-200 transition-colors">Ver PDF</a>
+                  <button 
+                    type="button"
+                    onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)} 
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Descargar
+                  </button>
                 )}
               </div>
-              <div className={`p-2 rounded-xl border flex flex-col justify-between items-center ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
-                <div className="flex flex-col items-center">
+              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
+                <div className="flex flex-col items-center w-full">
                   <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
-                  <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
+                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
                 </div>
                 {vehiculo.urlCertificado && (
-                  <a href={vehiculo.urlCertificado} target="_blank" rel="noreferrer" className="mt-2 text-[10px] font-bold bg-white text-slate-800 px-3 py-1 rounded shadow hover:bg-slate-200 transition-colors">Ver PDF</a>
+                  <button 
+                    type="button"
+                    onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${id}.pdf`)} 
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Descargar
+                  </button>
                 )}
               </div>
             </div>
           ) : (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-center">
-              <p className="text-xs text-red-600 font-bold">Vehiculo no registrado en la gestion de flota.</p>
+              <p className="text-xs text-red-600 font-bold">Vehículo no registrado en la gestión de flota.</p>
             </div>
           )}
         </div>
@@ -197,15 +257,15 @@ export default function VistaConductor() {
               <label className="block w-full cursor-pointer">
                 <input type="file" accept="image/*" capture="environment" onChange={capturarFoto} className="hidden" />
                 <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-4 text-center hover:bg-slate-100 transition-all">
-                  {foto ? <img src={foto} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Presiona para usar la camara</span>}
+                  {foto ? <img src={foto} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Presiona para usar la cámara</span>}
                 </div>
               </label>
             </div>
           </div>
 
           <div className="pt-2 border-t border-slate-100">
-            <h2 className="font-bold text-slate-800 mb-4">Inspeccion Visual</h2>
-            {preguntas.map((p) => (
+            <h2 className="font-bold text-slate-800 mb-4">Inspección Visual</h2>
+            {preguntasDinamicas.map((p) => (
               <div key={p.id} className="space-y-2 mb-4">
                 <p className="text-slate-700 font-medium text-sm">{p.texto}</p>
                 <div className="flex gap-4">
