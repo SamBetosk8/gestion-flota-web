@@ -13,11 +13,7 @@ export default function GeneradorQR() {
   const [procesando, setProcesando] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string>(''); 
   
-  const dominioPrincipal = window.location.hostname === 'localhost' 
-    ? 'https://gestion-flota-web.vercel.app' 
-    : window.location.origin;
-    
-  const urlVehiculo = `${dominioPrincipal}/v/${patente.toUpperCase()}`;
+  const urlVehiculo = `https://gestion-flota-web.vercel.app/v/${patente.toUpperCase()}`;
 
   useEffect(() => {
     const img = new Image();

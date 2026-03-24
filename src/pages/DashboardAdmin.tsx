@@ -16,7 +16,7 @@ export default function DashboardAdmin() {
   const [pestanaActiva, setPestanaActiva] = useState('reportes');
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos'); 
-  const [filtroTipoVehiculo, setFiltroTipoVehiculo] = useState('todos'); // NUEVO: Filtro por tipo
+  const [filtroTipoVehiculo, setFiltroTipoVehiculo] = useState('todos'); 
   
   const [reportes, setReportes] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
@@ -28,7 +28,7 @@ export default function DashboardAdmin() {
   
   const [formVehiculo, setFormVehiculo] = useState({
     patente: '',
-    tipo: 'Camioneta', // NUEVO: Tipo por defecto
+    tipo: 'Camioneta',
     vencimientoRevision: '',
     vencimientoCirculacion: '',
     vencimientoCertificado: '',
@@ -56,7 +56,7 @@ export default function DashboardAdmin() {
   const crearNuevoUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formUsuario.password.length < 6) {
-      alert("La contraseña debe tener al menos 6 caracteres.");
+      alert("La contrasena debe tener al menos 6 caracteres.");
       return;
     }
     setCreandoUsuario(true);
@@ -99,7 +99,7 @@ export default function DashboardAdmin() {
             fotoPath: null, 
             fotoEliminada: true 
           });
-          console.log(`Foto eliminada por antigüedad: ${rep.fotoPath}`);
+          console.log(`Foto eliminada por antiguedad: ${rep.fotoPath}`);
         } catch (e) {
           console.error("Error al borrar foto antigua:", e);
         }
@@ -200,7 +200,7 @@ export default function DashboardAdmin() {
           urlCertificado: urlCert,
           fechaRegistro: serverTimestamp()
         });
-        alert("Vehículo registrado correctamente.");
+        alert("Vehiculo registrado correctamente.");
       }
 
       setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', urlRevision: '', urlCirculacion: '', urlCertificado: '' });
@@ -220,7 +220,7 @@ export default function DashboardAdmin() {
       cargarVehiculos();
     } catch (error) {
       console.error(error);
-      alert("Error al procesar el vehículo");
+      alert("Error al procesar el vehiculo");
     } finally {
       setGuardandoVehiculo(false);
     }
@@ -244,7 +244,7 @@ export default function DashboardAdmin() {
   };
 
   const eliminarVehiculo = async (id: string) => {
-    const confirmar = window.confirm("¿Estás seguro de que deseas eliminar este vehículo del sistema?");
+    const confirmar = window.confirm("Estas seguro de que deseas eliminar este vehiculo del sistema?");
     if (confirmar) {
       try {
         await deleteDoc(doc(db, 'vehiculos', id));
@@ -256,7 +256,7 @@ export default function DashboardAdmin() {
   };
 
   const eliminarQR = async (id: string) => {
-    const confirmar = window.confirm("¿Estás seguro de que deseas eliminar este QR guardado?");
+    const confirmar = window.confirm("Estas seguro de que deseas eliminar este QR guardado?");
     if (confirmar) {
       try {
         await deleteDoc(doc(db, 'qrs_guardados', id));
@@ -269,7 +269,7 @@ export default function DashboardAdmin() {
   };
 
   const sincronizarQRsAntiguos = async () => {
-    const confirmar = window.confirm("¿Quieres buscar QRs antiguos que no estén en tu lista de vehículos y agregarlos automáticamente?");
+    const confirmar = window.confirm("Quieres buscar QRs antiguos que no esten en tu lista de vehiculos y agregarlos automaticamente?");
     if (!confirmar) return;
 
     setSincronizando(true);
@@ -301,10 +301,10 @@ export default function DashboardAdmin() {
       }
 
       if (agregados > 0) {
-        alert(`Sincronización exitosa. Se agregaron ${agregados} vehículos nuevos desde los QRs.`);
+        alert(`Sincronizacion exitosa. Se agregaron ${agregados} vehiculos nuevos desde los QRs.`);
         cargarVehiculos();
       } else {
-        alert("Todo está al día. No hay QRs antiguos que falten en la lista de vehículos.");
+        alert("Todo esta al dia. No hay QRs antiguos que falten en la lista de vehiculos.");
       }
     } catch (error) {
       console.error(error);
@@ -318,8 +318,8 @@ export default function DashboardAdmin() {
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
 
     if (esIOS) {
-      // En dispositivos Apple, abrimos el PDF en una nueva pestaña.
-      // Safari lo renderiza nativamente y permite guardarlo desde el botón de compartir.
+      // En dispositivos Apple, abrimos el PDF en una nueva pestana.
+      // Safari lo renderiza nativamente y permite guardarlo desde el boton de compartir.
       window.open(url, '_blank');
       return;
     }
@@ -340,7 +340,7 @@ export default function DashboardAdmin() {
         window.URL.revokeObjectURL(urlBlob);
       }, 100);
     } catch (error) {
-      console.error("Error al descargar, abriendo en nueva pestaña:", error);
+      console.error("Error al descargar, abriendo en nueva pestana:", error);
       window.open(url, '_blank');
     }
   };
@@ -394,7 +394,7 @@ export default function DashboardAdmin() {
     setGenerandoPdf(null);
   };
 
-  // NUEVOS FILTROS CON TIPO DE VEHÍCULO
+  // NUEVOS FILTROS CON TIPO DE VEHICULO
   const reportesFiltrados = reportes.filter(r => {
     const coincidePatente = r.vehiculoId?.toLowerCase().includes(busqueda.toLowerCase());
     let coincideEstado = true;
@@ -513,7 +513,7 @@ export default function DashboardAdmin() {
               className="p-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none bg-white shadow-sm font-bold text-slate-600 min-w-[150px]"
             >
               <option value="todos">Todos los Tipos</option>
-              <option value="Camion">Camión</option>
+              <option value="Camion">Camion</option>
               <option value="Tractor">Tractor</option>
               <option value="Camioneta">Camioneta</option>
             </select>
@@ -528,8 +528,8 @@ export default function DashboardAdmin() {
         <div className="flex space-x-4 mb-8 overflow-x-auto pb-2">
           <button onClick={() => setPestanaActiva('reportes')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'reportes' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Historial</button>
           <button onClick={() => setPestanaActiva('vehiculos')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'vehiculos' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Flota</button>
-          <button onClick={() => setPestanaActiva('qrs')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'qrs' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Códigos QR</button>
-          <button onClick={() => setPestanaActiva('estadisticas')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'estadisticas' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Estadísticas</button>
+          <button onClick={() => setPestanaActiva('qrs')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'qrs' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Codigos QR</button>
+          <button onClick={() => setPestanaActiva('estadisticas')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'estadisticas' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Estadisticas</button>
           <button onClick={() => setPestanaActiva('usuarios')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'usuarios' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Usuarios</button>
         </div>
 
@@ -593,7 +593,7 @@ export default function DashboardAdmin() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
               <h3 className="text-2xl font-black text-slate-800 mb-1 border-b border-slate-100 pb-4">Detalles del Checklist</h3>
-              <p className="text-sm text-slate-500 mb-6 mt-2">Vehículo: <span className="font-bold text-slate-800 text-lg">{reporteSeleccionado.vehiculoId}</span></p>
+              <p className="text-sm text-slate-500 mb-6 mt-2">Vehiculo: <span className="font-bold text-slate-800 text-lg">{reporteSeleccionado.vehiculoId}</span></p>
               
               <div className="max-h-80 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                 {reporteSeleccionado.respuestas ? (
@@ -614,12 +614,12 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO VEHÍCULOS */}
+        {/* CONTENIDO VEHICULOS */}
         {pestanaActiva === 'vehiculos' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-slate-800">Añadir Vehículo</h2>
+                <h2 className="text-xl font-bold text-slate-800">Anadir Vehiculo</h2>
                 <button 
                   type="button" 
                   onClick={sincronizarQRsAntiguos} 
@@ -639,14 +639,14 @@ export default function DashboardAdmin() {
                     <label className="block text-sm font-medium text-slate-600 mb-1">Tipo</label>
                     <select value={formVehiculo.tipo} onChange={(e) => setFormVehiculo({...formVehiculo, tipo: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
                       <option value="Camioneta">Camioneta</option>
-                      <option value="Camion">Camión</option>
+                      <option value="Camion">Camion</option>
                       <option value="Tractor">Tractor</option>
                     </select>
                   </div>
                 </div>
                 
                 <div className="pt-2 border-t border-slate-100">
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Rev. Técnica</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Rev. Tecnica</label>
                   <input type="date" value={formVehiculo.vencimientoRevision} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoRevision: e.target.value})} required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700 mb-2" />
                   
                   <div className="flex flex-col gap-2">
@@ -674,7 +674,7 @@ export default function DashboardAdmin() {
                 </div>
                 
                 <div className="pt-4 border-t border-slate-100 mt-2">
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Permiso Circulación</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Permiso Circulacion</label>
                   <input type="date" value={formVehiculo.vencimientoCirculacion} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoCirculacion: e.target.value})} required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700 mb-2" />
                   
                   <div className="flex flex-col gap-2">
@@ -742,11 +742,11 @@ export default function DashboardAdmin() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-white text-slate-600 text-xs uppercase tracking-wider border-b border-slate-100">
-                      <th className="p-4 font-bold">Patente</th><th className="p-4 font-bold">Rev. Técnica</th><th className="p-4 font-bold">Permiso Circ.</th><th className="p-4 font-bold">Certificado</th><th className="p-4 font-bold text-center">Acciones</th>
+                      <th className="p-4 font-bold">Patente</th><th className="p-4 font-bold">Rev. Tecnica</th><th className="p-4 font-bold">Permiso Circ.</th><th className="p-4 font-bold">Certificado</th><th className="p-4 font-bold text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {vehiculosFiltrados.length === 0 ? (<tr><td colSpan={5} className="p-8 text-center text-slate-400">No se encontraron vehículos.</td></tr>) 
+                    {vehiculosFiltrados.length === 0 ? (<tr><td colSpan={5} className="p-8 text-center text-slate-400">No se encontraron vehiculos.</td></tr>) 
                     : vehiculosFiltrados.map((vehiculo) => {
                       const revInfo = calcularEstadoVencimiento(vehiculo.vencimientoRevision);
                       const circInfo = calcularEstadoVencimiento(vehiculo.vencimientoCirculacion);
@@ -809,59 +809,67 @@ export default function DashboardAdmin() {
           <div>
             {qrsFiltrados.length === 0 ? (
               <div className="bg-white p-12 rounded-3xl shadow-lg text-center border border-slate-100">
-                <p className="text-slate-500 text-lg">No se encontraron códigos QR guardados.</p>
+                <p className="text-slate-500 text-lg">No se encontraron codigos QR guardados.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {qrsFiltrados.map((qr) => (
-                  <div key={qr.id} className="flex flex-col gap-2 relative">
-                    
-                    <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
-                      <img src={LOGO_BASE64} alt="Logo" className="h-12 object-contain mx-auto mb-4" />
-                      <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
-                      <p className="text-xs text-slate-500 font-bold uppercase mb-4">{qr.tipo || 'Control de Flota'}</p>
-                      <div className="bg-white p-2 rounded-xl border-4 border-slate-800 mb-4 shadow-sm">
-                        <QRCodeSVG value={qr.url} size={130} level="H" includeMargin={false} />
-                      </div>
-                    </div>
+                {qrsFiltrados.map((qr) => {
+                  // Parche automatico para reescribir la URL al vuelo si tiene localhost o 127.0.0.1
+                  const urlCorregida = qr.url?.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, 'https://gestion-flota-web.vercel.app') || '';
 
-                    <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
-                      <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
-                        <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
-                        <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
-                        <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">{qr.tipo || 'Control de Flota'}</p>
-                        <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
-                          <QRCodeSVG value={qr.url} size={220} level="H" includeMargin={false} />
+                  return (
+                    <div key={qr.id} className="flex flex-col gap-2 relative">
+                      
+                      <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
+                        <img src={LOGO_BASE64} alt="Logo" className="h-12 object-contain mx-auto mb-4" />
+                        <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
+                        <p className="text-xs text-slate-500 font-bold uppercase mb-4">{qr.tipo || 'Control de Flota'}</p>
+                        <div className="bg-white p-2 rounded-xl border-4 border-slate-800 mb-4 shadow-sm">
+                          {/* Dibuja el QR con la URL corregida */}
+                          <QRCodeSVG value={urlCorregida} size={130} level="H" includeMargin={false} />
                         </div>
-                        <p className="text-slate-500 font-bold text-center">Escanee este código para iniciar el checklist.</p>
                       </div>
-                    </div>
 
-                    <div className="flex gap-2 w-full mt-2 relative z-10">
-                      <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-sm">
-                        {generandoPdf === qr.patente ? '...' : 'Descargar'}
-                      </button>
-                      <a href={qr.url} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-sm">Probar</a>
+                      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+                        <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
+                          <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
+                          <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
+                          <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">{qr.tipo || 'Control de Flota'}</p>
+                          <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
+                            {/* Dibuja el QR interno del PDF con la URL corregida */}
+                            <QRCodeSVG value={urlCorregida} size={220} level="H" includeMargin={false} />
+                          </div>
+                          <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar el checklist.</p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 w-full mt-2 relative z-10">
+                        <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-sm">
+                          {generandoPdf === qr.patente ? '...' : 'Descargar'}
+                        </button>
+                        {/* El enlace de probar navega a la URL corregida */}
+                        <a href={urlCorregida} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-sm">Probar</a>
+                      </div>
+                      
+                      <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10 text-sm">Eliminar QR</button>
                     </div>
-                    
-                    <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10 text-sm">Eliminar QR</button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         )}
 
-        {/* CONTENIDO ESTADÍSTICAS */}
+        {/* CONTENIDO ESTADISTICAS */}
         {pestanaActiva === 'estadisticas' && (
           <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
               <div>
-                <h2 className="text-xl font-bold text-slate-800">Variación de Kilometraje</h2>
-                <p className="text-sm text-slate-500 mt-1">Últimos 15 días de registro</p>
+                <h2 className="text-xl font-bold text-slate-800">Variacion de Kilometraje</h2>
+                <p className="text-sm text-slate-500 mt-1">Ultimos 15 dias de registro</p>
               </div>
               <div className="w-full sm:w-auto">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Vehículo</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Vehiculo</label>
                 <select value={vehiculoEstadistica} onChange={(e) => setVehiculoEstadistica(e.target.value)} className="w-full sm:w-64 p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none font-bold text-slate-700">
                   {vehiculosConReportes.length === 0 ? (<option value="">Sin registros</option>) : (vehiculosConReportes.map(v => (<option key={v} value={v}>{v}</option>)))}
                 </select>
@@ -870,7 +878,7 @@ export default function DashboardAdmin() {
 
             {estadisticas.datos.length === 0 ? (
               <div className="flex items-center justify-center h-64 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                <p className="text-slate-400 font-medium">Necesitas reportes en al menos 2 días distintos para generar la gráfica.</p>
+                <p className="text-slate-400 font-medium">Necesitas reportes en al menos 2 dias distintos para generar la grafica.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -881,9 +889,9 @@ export default function DashboardAdmin() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis dataKey="fecha" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
                       <YAxis tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val} km`} />
-                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variación']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
+                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variacion']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
                       <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                      <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Día" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
+                      <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Dia" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -900,7 +908,7 @@ export default function DashboardAdmin() {
                   </div>
                   
                   <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
-                    <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-1">Pico Máximo</p>
+                    <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-1">Pico Maximo</p>
                     <p className="text-3xl font-black text-orange-700">{estadisticas.kpis?.maximo.kms.toLocaleString()} <span className="text-base font-medium text-orange-500">km</span></p>
                     <p className="text-sm font-medium text-orange-600 mt-2">Registrado el {estadisticas.kpis?.maximo.fecha}</p>
                   </div>
@@ -920,11 +928,11 @@ export default function DashboardAdmin() {
             </div>
             <form onSubmit={crearNuevoUsuario} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Correo Electrónico</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Correo Electronico</label>
                 <input type="email" required value={formUsuario.email} onChange={(e) => setFormUsuario({...formUsuario, email: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="nuevo@empresa.com" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Contraseña (Mínimo 6 caracteres)</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Contrasena (Minimo 6 caracteres)</label>
                 <input type="password" required minLength={6} value={formUsuario.password} onChange={(e) => setFormUsuario({...formUsuario, password: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••" />
               </div>
               <button type="submit" disabled={creandoUsuario} className={`w-full font-bold py-4 rounded-xl mt-4 transition-all shadow-md ${creandoUsuario ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white hover:bg-slate-900'}`}>
