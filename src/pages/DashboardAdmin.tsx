@@ -314,6 +314,16 @@ export default function DashboardAdmin() {
   };
 
   const forzarDescarga = async (url: string, nombreArchivo: string) => {
+    // Detectar si el dispositivo es iOS (iPhone, iPad, iPod) o Safari en Mac
+    const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+
+    if (esIOS) {
+      // En dispositivos Apple, abrimos el PDF en una nueva pestaña.
+      // Safari lo renderiza nativamente y permite guardarlo desde el botón de compartir.
+      window.open(url, '_blank');
+      return;
+    }
+
     try {
       const response = await fetch(url);
       const blob = await response.blob();
@@ -324,7 +334,11 @@ export default function DashboardAdmin() {
       a.download = nombreArchivo;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(urlBlob);
+      
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(urlBlob);
+      }, 100);
     } catch (error) {
       console.error("Error al descargar, abriendo en nueva pestaña:", error);
       window.open(url, '_blank');
