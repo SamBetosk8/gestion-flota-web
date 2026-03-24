@@ -11,11 +11,9 @@ export default function VistaConductor() {
   const [foto, setFoto] = useState<string | null>(null);
   const [subiendo, setSubiendo] = useState(false);
   
-  // Estados para la carga de datos del vehiculo
   const [vehiculo, setVehiculo] = useState<any>(null);
   const [cargandoVehiculo, setCargandoVehiculo] = useState(true);
 
-  // Buscar informacion del vehiculo para ver estado de documentos
   useEffect(() => {
     const cargarVehiculo = async () => {
       if (!id) return;
@@ -28,7 +26,7 @@ export default function VistaConductor() {
           setVehiculo(querySnapshot.docs[0].data());
         }
       } catch (error) {
-        console.error("Error al cargar vehiculo:", error);
+        console.error(error);
       } finally {
         setCargandoVehiculo(false);
       }
@@ -37,9 +35,9 @@ export default function VistaConductor() {
   }, [id]);
 
   const preguntas = [
-    { id: 'frenos', texto: '¿Los frenos funcionan correctamente?' },
-    { id: 'luces', texto: '¿Las luces encienden?' },
-    { id: 'neumaticos', texto: '¿Neumaticos en buen estado?' }
+    { id: 'frenos', texto: 'Los frenos funcionan correctamente?' },
+    { id: 'luces', texto: 'Las luces encienden?' },
+    { id: 'neumaticos', texto: 'Neumaticos en buen estado?' }
   ];
 
   const capturarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,9 +70,11 @@ export default function VistaConductor() {
 
     try {
       let fotoUrl = null;
+      let fotoPath = null;
+      
       if (foto) {
-        const nombreFoto = `kilometrajes/${id}-${Date.now()}.jpg`;
-        const storageRef = ref(storage, nombreFoto);
+        fotoPath = `kilometrajes/${id}-${Date.now()}.jpg`;
+        const storageRef = ref(storage, fotoPath);
         await uploadString(storageRef, foto, 'data_url');
         fotoUrl = await getDownloadURL(storageRef);
       }
@@ -83,6 +83,7 @@ export default function VistaConductor() {
         vehiculoId: id,
         kilometraje: kilometrajeEscrito || "No ingresado",
         fotoUrl: fotoUrl,
+        fotoPath: fotoPath, // Guardamos la ruta exacta para borrarla en 15 dias
         fallaCritica: tieneFallaCritica,
         respuestas: respuestas,
         fecha: serverTimestamp()
@@ -92,14 +93,13 @@ export default function VistaConductor() {
       else setEncuestaCompletada(true);
 
     } catch (error) {
-      console.error("Error al guardar en Firebase:", error);
+      console.error(error);
       alert("Hubo un error al enviar el reporte.");
     } finally {
       setSubiendo(false);
     }
   };
 
-  // Funcion para evaluar colores segun fecha
   const calcularEstadoVencimiento = (fechaString: string) => {
     if (!fechaString) return { texto: 'No registrado', clase: 'text-slate-500 bg-slate-100 border-slate-200' };
     const fechaVencimiento = new Date(fechaString);
@@ -109,7 +109,7 @@ export default function VistaConductor() {
 
     if (diasRestantes < 0) return { texto: 'Vencido', clase: 'bg-red-100 text-red-700 border-red-200' };
     if (diasRestantes <= 10) return { texto: 'Por vencer', clase: 'bg-orange-100 text-orange-700 border-orange-200' };
-    return { texto: 'Al día', clase: 'bg-green-100 text-green-700 border-green-200' };
+    return { texto: 'Al dia', clase: 'bg-green-100 text-green-700 border-green-200' };
   };
 
   if (bloqueado) {
@@ -142,7 +142,6 @@ export default function VistaConductor() {
           <p className="text-blue-100 font-mono text-lg mt-1 tracking-widest">{id}</p>
         </div>
 
-        {/* SECCION ESTADO DE DOCUMENTOS */}
         <div className="p-4 bg-slate-50 border-b border-slate-200">
           <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Estado de Documentos</h2>
           
@@ -150,22 +149,37 @@ export default function VistaConductor() {
             <p className="text-center text-xs text-slate-500">Verificando en base de datos...</p>
           ) : vehiculo ? (
             <div className="grid grid-cols-3 gap-2 text-center">
-              <div className={`p-2 rounded-xl border flex flex-col justify-center items-center ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
-                <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
-                <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
+              <div className={`p-2 rounded-xl border flex flex-col justify-between items-center ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
+                  <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
+                </div>
+                {vehiculo.urlRevision && (
+                  <a href={vehiculo.urlRevision} target="_blank" rel="noreferrer" className="mt-2 text-[10px] font-bold bg-white text-slate-800 px-3 py-1 rounded shadow hover:bg-slate-200 transition-colors">Ver PDF</a>
+                )}
               </div>
-              <div className={`p-2 rounded-xl border flex flex-col justify-center items-center ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
-                <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
-                <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
+              <div className={`p-2 rounded-xl border flex flex-col justify-between items-center ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
+                  <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
+                </div>
+                {vehiculo.urlCirculacion && (
+                  <a href={vehiculo.urlCirculacion} target="_blank" rel="noreferrer" className="mt-2 text-[10px] font-bold bg-white text-slate-800 px-3 py-1 rounded shadow hover:bg-slate-200 transition-colors">Ver PDF</a>
+                )}
               </div>
-              <div className={`p-2 rounded-xl border flex flex-col justify-center items-center ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
-                <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
-                <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
+              <div className={`p-2 rounded-xl border flex flex-col justify-between items-center ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
+                  <span className="text-xs font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
+                </div>
+                {vehiculo.urlCertificado && (
+                  <a href={vehiculo.urlCertificado} target="_blank" rel="noreferrer" className="mt-2 text-[10px] font-bold bg-white text-slate-800 px-3 py-1 rounded shadow hover:bg-slate-200 transition-colors">Ver PDF</a>
+                )}
               </div>
             </div>
           ) : (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-center">
-              <p className="text-xs text-red-600 font-bold">⚠️ Vehículo no registrado en la gestión de flota.</p>
+              <p className="text-xs text-red-600 font-bold">Vehiculo no registrado en la gestion de flota.</p>
             </div>
           )}
         </div>
@@ -183,7 +197,7 @@ export default function VistaConductor() {
               <label className="block w-full cursor-pointer">
                 <input type="file" accept="image/*" capture="environment" onChange={capturarFoto} className="hidden" />
                 <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-4 text-center hover:bg-slate-100 transition-all">
-                  {foto ? <img src={foto} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Presiona para usar la cámara</span>}
+                  {foto ? <img src={foto} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Presiona para usar la camara</span>}
                 </div>
               </label>
             </div>
