@@ -10,7 +10,7 @@ const preguntasPorTipo = {
     { id: 'quinta_rueda', texto: '¿La quinta rueda y enganches estan en buen estado?' },
     { id: 'neumaticos_tracto', texto: '¿Los neumaticos (incluyendo repuesto) estan en buen estado?' }
   ],
-  'Semi remolque': [
+  'Semirremolque': [
     { id: 'conexiones', texto: '¿Las conexiones de aire y luces estan operativas?' },
     { id: 'patas_apoyo', texto: '¿Las patas de apoyo y seguros funcionan correctamente?' },
     { id: 'neumaticos_semi', texto: '¿Los neumaticos y ejes estan en buen estado?' }

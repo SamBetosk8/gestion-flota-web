@@ -133,7 +133,7 @@ export default function GeneradorQR() {
         <div className="mb-6">
           <label className="block text-xs font-black text-slate-400 uppercase mb-3 text-left ml-1">Tipo de Vehiculo</label>
           <div className="flex gap-2">
-            {['Tracto camión', 'Semi remolque', 'Camioneta'].map((tipo) => (
+            {['Tracto camión', 'Semirremolque', 'Camioneta'].map((tipo) => (
               <button 
                 key={tipo}
                 onClick={() => setTipoVehiculo(tipo)}

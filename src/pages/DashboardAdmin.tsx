@@ -564,7 +564,7 @@ export default function DashboardAdmin() {
             >
               <option value="todos">Todos los Tipos</option>
               <option value="Tracto camión">Tracto camión</option>
-              <option value="Semi remolque">Semi remolque</option>
+              <option value="Semirremolque">Semirremolque</option>
               <option value="Camioneta">Camioneta</option>
             </select>
           </div>
@@ -706,7 +706,7 @@ export default function DashboardAdmin() {
                     <select value={formVehiculo.tipo} onChange={(e) => setFormVehiculo({...formVehiculo, tipo: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
                       <option value="Camioneta">Camioneta</option>
                       <option value="Tracto camión">Tracto camión</option>
-                      <option value="Semi remolque">Semi remolque</option>
+                      <option value="Semirremolque">Semirremolque</option>
                     </select>
                   </div>
                 </div>
