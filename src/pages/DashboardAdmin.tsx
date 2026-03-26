@@ -122,9 +122,12 @@ export default function DashboardAdmin() {
                   console.error("Error al borrar reporte antiguo:", e);
                 }
               } else {
+                // Arreglo retroactivo para reportes antiguos con el nombre separado
+                if (rep.tipoVehiculo === 'Semi remolque') rep.tipoVehiculo = 'Semirremolque';
                 reportesValidos.push(rep);
               }
             } else {
+              if (rep.tipoVehiculo === 'Semi remolque') rep.tipoVehiculo = 'Semirremolque';
               reportesValidos.push(rep); 
             }
           }
@@ -150,7 +153,12 @@ export default function DashboardAdmin() {
         try {
           const q = query(collection(db, 'qrs_guardados'), orderBy('fechaRegistro', 'desc'));
           const querySnapshot = await getDocs(q);
-          setQrsGuardados(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          setQrsGuardados(querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            // Arreglo retroactivo
+            if (data.tipo === 'Semi remolque') data.tipo = 'Semirremolque';
+            return { id: doc.id, ...data };
+          }));
         } catch (error) {
           console.error(error);
         }
@@ -279,7 +287,7 @@ export default function DashboardAdmin() {
   const editarVehiculoEnFormulario = (vehiculo: any) => {
     setFormVehiculo({
       patente: vehiculo.patente,
-      tipo: vehiculo.tipo || 'Camioneta',
+      tipo: vehiculo.tipo === 'Semi remolque' ? 'Semirremolque' : (vehiculo.tipo || 'Camioneta'),
       vencimientoRevision: vehiculo.vencimientoRevision,
       vencimientoCirculacion: vehiculo.vencimientoCirculacion,
       vencimientoCertificado: vehiculo.vencimientoCertificado || '',
@@ -334,9 +342,10 @@ export default function DashboardAdmin() {
         const dataQr = docQr.data();
         const patenteQR = dataQr.patente;
         if (!patentesVehiculos.has(patenteQR)) {
+          const tipoCorregido = dataQr.tipo === 'Semi remolque' ? 'Semirremolque' : (dataQr.tipo || 'Camioneta');
           await addDoc(collection(db, 'vehiculos'), {
             patente: patenteQR,
-            tipo: dataQr.tipo || 'Camioneta',
+            tipo: tipoCorregido,
             vencimientoRevision: '',
             vencimientoCirculacion: '',
             vencimientoCertificado: '',
@@ -452,13 +461,15 @@ export default function DashboardAdmin() {
 
   const vehiculosFiltrados = vehiculos.filter(v => {
     const coincidePatente = v.patente?.toLowerCase().includes(busqueda.toLowerCase());
-    const coincideTipo = filtroTipoVehiculo === 'todos' || v.tipo === filtroTipoVehiculo;
+    const tipoNorm = v.tipo === 'Semi remolque' ? 'Semirremolque' : v.tipo;
+    const coincideTipo = filtroTipoVehiculo === 'todos' || tipoNorm === filtroTipoVehiculo;
     return coincidePatente && coincideTipo;
   });
 
   const qrsFiltrados = qrsGuardados.filter(q => {
     const coincidePatente = q.patente?.toLowerCase().includes(busqueda.toLowerCase());
-    const coincideTipo = filtroTipoVehiculo === 'todos' || q.tipo === filtroTipoVehiculo;
+    const tipoNorm = q.tipo === 'Semi remolque' ? 'Semirremolque' : q.tipo;
+    const coincideTipo = filtroTipoVehiculo === 'todos' || tipoNorm === filtroTipoVehiculo;
     return coincidePatente && coincideTipo;
   });
 
@@ -551,7 +562,6 @@ export default function DashboardAdmin() {
     <div className="min-h-screen bg-slate-50 p-8 z-10 relative overflow-hidden">
       <div className="max-w-6xl mx-auto">
         
-        {/* ENCABEZADO Y BUSCADORES GLOBALES */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-200 pb-6">
           <div><h1 className="text-3xl font-black text-slate-800">Panel de Control</h1></div>
           
@@ -647,7 +657,7 @@ export default function DashboardAdmin() {
               </table>
               {reportesFiltrados.length > limiteReportes && (
                 <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-                  <button onClick={() => setLimiteReportes(prev => prev + 10)} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar más registros</button>
+                  <button onClick={() => setLimiteReportes(prev => prev + 10)} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas registros</button>
                 </div>
               )}
             </div>
@@ -867,7 +877,7 @@ export default function DashboardAdmin() {
                 </table>
                 {vehiculosFiltrados.length > limiteVehiculos && (
                   <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-                    <button onClick={() => setLimiteVehiculos(prev => prev + 10)} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar más vehículos</button>
+                    <button onClick={() => setLimiteVehiculos(prev => prev + 10)} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas vehiculos</button>
                   </div>
                 )}
               </div>
@@ -927,7 +937,7 @@ export default function DashboardAdmin() {
             
             {qrsFiltrados.length > limiteQRs && (
               <div className="mt-8 text-center">
-                <button onClick={() => setLimiteQRs(prev => prev + 12)} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar más QRs</button>
+                <button onClick={() => setLimiteQRs(prev => prev + 12)} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas QRs</button>
               </div>
             )}
           </div>

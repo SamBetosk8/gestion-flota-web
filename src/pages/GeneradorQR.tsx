@@ -13,7 +13,6 @@ export default function GeneradorQR() {
   const [procesando, setProcesando] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string>(''); 
   
-  // URL de producción forzada para evitar el error de localhost
   const urlVehiculo = `https://gestion-flota-web.vercel.app/v/${patente.toUpperCase()}`;
 
   useEffect(() => {

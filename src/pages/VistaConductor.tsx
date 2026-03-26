@@ -4,7 +4,6 @@ import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'fire
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 
-// Banco de preguntas ampliado basado en los PDFs de inspeccion
 const preguntasPorTipo = {
   'Tracto camión': [
     { id: 'presiones_tablero', texto: '¿Los indicadores de presion (aceite, aire/vacio) marcan niveles normales?' },
@@ -20,7 +19,7 @@ const preguntasPorTipo = {
     { id: 'quinta_rueda', texto: '¿La quinta rueda y sus conexiones de aire/electricas estan en buen estado?' },
     { id: 'equipo_emergencia', texto: '¿Lleva extintor cargado, botiquin, triangulos, gato hidraulico y llave de rueda?' }
   ],
-  'Semi remolque': [
+  'Semirremolque': [
     { id: 'estado_carroceria', texto: '¿La carroceria se encuentra sin abolladuras, corrosion ni elementos sueltos?' },
     { id: 'luces_remolque', texto: '¿Las luces de posicion, intermitentes, freno y galibo estan operativas?' },
     { id: 'huincha_reflectante', texto: '¿La huincha reflectante en el chasis esta visible y en buen estado?' },
@@ -102,7 +101,8 @@ export default function VistaConductor() {
     }
   };
 
-  const tipoActual = vehiculo?.tipo || 'Camioneta';
+  let tipoActual = vehiculo?.tipo || 'Camioneta';
+  if (tipoActual === 'Semi remolque') tipoActual = 'Semirremolque';
   const preguntasDinamicas = preguntasPorTipo[tipoActual as keyof typeof preguntasPorTipo] || preguntasPorTipo['Camioneta'];
 
   const capturarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
