@@ -4,22 +4,21 @@ import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'fire
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 
-// Banco de preguntas dinámico según el tipo de vehículo
 const preguntasPorTipo = {
-  'Camion': [
-    { id: 'frenos_aire', texto: '¿La presión de los frenos de aire es correcta?' },
-    { id: 'acoplado', texto: '¿El acoplado o rampa está asegurado correctamente?' },
-    { id: 'neumaticos_camion', texto: '¿Los neumáticos (incluyendo repuesto) están en buen estado?' }
+  'Tracto camión': [
+    { id: 'frenos_aire', texto: '¿La presion de los frenos de aire es correcta?' },
+    { id: 'quinta_rueda', texto: '¿La quinta rueda y enganches estan en buen estado?' },
+    { id: 'neumaticos_tracto', texto: '¿Los neumaticos (incluyendo repuesto) estan en buen estado?' }
   ],
-  'Tractor': [
-    { id: 'hidraulico', texto: '¿El sistema hidráulico no presenta fugas?' },
-    { id: 'implementos', texto: '¿Los implementos agrícolas están bien enganchados?' },
-    { id: 'luces_faena', texto: '¿Las luces de faena y baliza están operativas?' }
+  'Semi remolque': [
+    { id: 'conexiones', texto: '¿Las conexiones de aire y luces estan operativas?' },
+    { id: 'patas_apoyo', texto: '¿Las patas de apoyo y seguros funcionan correctamente?' },
+    { id: 'neumaticos_semi', texto: '¿Los neumaticos y ejes estan en buen estado?' }
   ],
   'Camioneta': [
     { id: 'frenos', texto: '¿Los frenos funcionan correctamente?' },
     { id: 'luces', texto: '¿Las luces e intermitentes encienden?' },
-    { id: 'neumaticos', texto: '¿Neumáticos en buen estado?' }
+    { id: 'neumaticos', texto: '¿Neumaticos en buen estado?' }
   ]
 };
 
@@ -54,12 +53,9 @@ export default function VistaConductor() {
   }, [id]);
 
   const forzarDescarga = async (url: string, nombreArchivo: string) => {
-    // Detectar si el dispositivo es iOS (iPhone, iPad, iPod) o Safari en Mac
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
 
     if (esIOS) {
-      // En dispositivos Apple, abrimos el PDF en una nueva pestaña.
-      // Safari lo renderiza nativamente y permite guardarlo desde el botón de compartir.
       window.open(url, '_blank');
       return;
     }
@@ -74,18 +70,13 @@ export default function VistaConductor() {
       a.download = nombreArchivo;
       document.body.appendChild(a);
       a.click();
-      
-      setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(urlBlob);
-      }, 100);
+      window.URL.revokeObjectURL(urlBlob);
     } catch (error) {
-      console.error("Error al descargar, abriendo en nueva pestaña:", error);
+      console.error("Error al descargar, abriendo en nueva pestana:", error);
       window.open(url, '_blank');
     }
   };
 
-  // Determinar qué preguntas usar. Si no tiene tipo, usa Camioneta por defecto.
   const tipoActual = vehiculo?.tipo || 'Camioneta';
   const preguntasDinamicas = preguntasPorTipo[tipoActual as keyof typeof preguntasPorTipo] || preguntasPorTipo['Camioneta'];
 
@@ -130,7 +121,7 @@ export default function VistaConductor() {
 
       await addDoc(collection(db, 'reportes'), {
         vehiculoId: id,
-        tipoVehiculo: tipoActual, // Guardamos el tipo para el filtro del dashboard
+        tipoVehiculo: tipoActual,
         kilometraje: kilometrajeEscrito || "No ingresado",
         fotoUrl: fotoUrl,
         fotoPath: fotoPath,
@@ -159,15 +150,15 @@ export default function VistaConductor() {
 
     if (diasRestantes < 0) return { texto: 'Vencido', clase: 'bg-red-100 text-red-700 border-red-200' };
     if (diasRestantes <= 10) return { texto: 'Por vencer', clase: 'bg-orange-100 text-orange-700 border-orange-200' };
-    return { texto: 'Al día', clase: 'bg-green-100 text-green-700 border-green-200' };
+    return { texto: 'Al dia', clase: 'bg-green-100 text-green-700 border-green-200' };
   };
 
   if (bloqueado) {
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4 text-center">
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500">
-          <h1 className="text-2xl font-black text-red-700">VEHÍCULO BLOQUEADO</h1>
-          <p className="mt-4 text-gray-600">Falla crítica detectada. Avise al taller inmediatamente.</p>
+          <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
+          <p className="mt-4 text-gray-600">Falla critica detectada. Avise al taller inmediatamente.</p>
         </div>
       </div>
     );
@@ -204,7 +195,7 @@ export default function VistaConductor() {
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
                 <div className="flex flex-col items-center w-full">
-                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Técnica</span>
+                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
                   <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
                 </div>
                 {vehiculo.urlRevision && (
@@ -253,7 +244,7 @@ export default function VistaConductor() {
             </div>
           ) : (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-center">
-              <p className="text-xs text-red-600 font-bold">Vehículo no registrado en la gestión de flota.</p>
+              <p className="text-xs text-red-600 font-bold">Vehiculo no registrado en la gestion de flota.</p>
             </div>
           )}
         </div>
@@ -271,14 +262,14 @@ export default function VistaConductor() {
               <label className="block w-full cursor-pointer">
                 <input type="file" accept="image/*" capture="environment" onChange={capturarFoto} className="hidden" />
                 <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-4 text-center hover:bg-slate-100 transition-all">
-                  {foto ? <img src={foto} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Presiona para usar la cámara</span>}
+                  {foto ? <img src={foto} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Presiona para usar la camara</span>}
                 </div>
               </label>
             </div>
           </div>
 
           <div className="pt-2 border-t border-slate-100">
-            <h2 className="font-bold text-slate-800 mb-4">Inspección Visual</h2>
+            <h2 className="font-bold text-slate-800 mb-4">Inspeccion Visual</h2>
             {preguntasDinamicas.map((p) => (
               <div key={p.id} className="space-y-2 mb-4">
                 <p className="text-slate-700 font-medium text-sm">{p.texto}</p>

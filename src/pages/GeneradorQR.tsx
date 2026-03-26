@@ -13,6 +13,7 @@ export default function GeneradorQR() {
   const [procesando, setProcesando] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string>(''); 
   
+  // URL de producción forzada para evitar el error de localhost
   const urlVehiculo = `https://gestion-flota-web.vercel.app/v/${patente.toUpperCase()}`;
 
   useEffect(() => {
@@ -118,7 +119,7 @@ export default function GeneradorQR() {
 
       <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full text-center border border-slate-100 z-10">
         <h2 className="text-2xl font-black text-slate-800 mb-2">Generador QR</h2>
-        <p className="text-slate-500 mb-8 text-sm">Identificadores de Vehículos</p>
+        <p className="text-slate-500 mb-8 text-sm">Identificadores de Vehiculos</p>
         
         <div className="mb-6 text-left">
           <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Patente / ID</label>
@@ -130,9 +131,9 @@ export default function GeneradorQR() {
         </div>
 
         <div className="mb-6">
-          <label className="block text-xs font-black text-slate-400 uppercase mb-3 text-left ml-1">Tipo de Vehículo</label>
+          <label className="block text-xs font-black text-slate-400 uppercase mb-3 text-left ml-1">Tipo de Vehiculo</label>
           <div className="flex gap-2">
-            {['Camión', 'Tractor', 'Camioneta'].map((tipo) => (
+            {['Tracto camión', 'Semi remolque', 'Camioneta'].map((tipo) => (
               <button 
                 key={tipo}
                 onClick={() => setTipoVehiculo(tipo)}

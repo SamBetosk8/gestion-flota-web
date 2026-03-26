@@ -18,7 +18,6 @@ export default function DashboardAdmin() {
   const [filtroEstado, setFiltroEstado] = useState('todos'); 
   const [filtroTipoVehiculo, setFiltroTipoVehiculo] = useState('todos');
   
-  // Estados de paginacion
   const [limiteReportes, setLimiteReportes] = useState(10);
   const [limiteVehiculos, setLimiteVehiculos] = useState(10);
   const [limiteQRs, setLimiteQRs] = useState(12);
@@ -90,7 +89,6 @@ export default function DashboardAdmin() {
     }
   };
 
-  // Resetea la paginacion cuando cambian los filtros o la pestana
   useEffect(() => {
     setLimiteReportes(10);
     setLimiteVehiculos(10);
@@ -103,7 +101,7 @@ export default function DashboardAdmin() {
         try {
           const q = query(collection(db, 'reportes'), orderBy('fecha', 'asc'));
           const querySnapshot = await getDocs(q);
-          const reportesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const reportesData: any[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           
           const limiteDias = new Date();
           limiteDias.setDate(limiteDias.getDate() - 15);
@@ -111,19 +109,23 @@ export default function DashboardAdmin() {
           const reportesValidos = [];
 
           for (const rep of reportesData) {
-            if (rep.fecha && rep.fecha.toDate() < limiteDias) {
-              try {
-                if (rep.fotoPath && !rep.fotoEliminada) {
-                  const fotoRef = ref(storage, rep.fotoPath);
-                  await deleteObject(fotoRef).catch(e => console.log(e));
+            if (rep.fecha && typeof rep.fecha.toDate === 'function') {
+              if (rep.fecha.toDate().getTime() < limiteDias.getTime()) {
+                try {
+                  if (rep.fotoPath && typeof rep.fotoPath === 'string' && !rep.fotoEliminada) {
+                    const fotoRef = ref(storage, rep.fotoPath);
+                    await deleteObject(fotoRef).catch(e => console.log("Foto ya no existe", e));
+                  }
+                  await deleteDoc(doc(db, 'reportes', rep.id));
+                  console.log(`Reporte eliminado por antiguedad (+15 dias): ${rep.id}`);
+                } catch (e) {
+                  console.error("Error al borrar reporte antiguo:", e);
                 }
-                await deleteDoc(doc(db, 'reportes', rep.id));
-                console.log(`Reporte eliminado por antiguedad (+15 dias): ${rep.id}`);
-              } catch (e) {
-                console.error("Error al borrar reporte antiguo:", e);
+              } else {
+                reportesValidos.push(rep);
               }
             } else {
-              reportesValidos.push(rep);
+              reportesValidos.push(rep); 
             }
           }
 
@@ -561,8 +563,8 @@ export default function DashboardAdmin() {
               className="p-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none bg-white shadow-sm font-bold text-slate-600 min-w-[150px]"
             >
               <option value="todos">Todos los Tipos</option>
-              <option value="Camion">Camion</option>
-              <option value="Tractor">Tractor</option>
+              <option value="Tracto camión">Tracto camión</option>
+              <option value="Semi remolque">Semi remolque</option>
               <option value="Camioneta">Camioneta</option>
             </select>
           </div>
@@ -703,8 +705,8 @@ export default function DashboardAdmin() {
                     <label className="block text-sm font-medium text-slate-600 mb-1">Tipo</label>
                     <select value={formVehiculo.tipo} onChange={(e) => setFormVehiculo({...formVehiculo, tipo: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
                       <option value="Camioneta">Camioneta</option>
-                      <option value="Camion">Camion</option>
-                      <option value="Tractor">Tractor</option>
+                      <option value="Tracto camión">Tracto camión</option>
+                      <option value="Semi remolque">Semi remolque</option>
                     </select>
                   </div>
                 </div>
