@@ -16,7 +16,12 @@ export default function DashboardAdmin() {
   const [pestanaActiva, setPestanaActiva] = useState('reportes');
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos'); 
-  const [filtroTipoVehiculo, setFiltroTipoVehiculo] = useState('todos'); 
+  const [filtroTipoVehiculo, setFiltroTipoVehiculo] = useState('todos');
+  
+  // Estados de paginacion
+  const [limiteReportes, setLimiteReportes] = useState(10);
+  const [limiteVehiculos, setLimiteVehiculos] = useState(10);
+  const [limiteQRs, setLimiteQRs] = useState(12);
   
   const [reportes, setReportes] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
@@ -85,45 +90,51 @@ export default function DashboardAdmin() {
     }
   };
 
-  const limpiarFotosAntiguas = async (reportesData: any[]) => {
-    const limite = new Date();
-    limite.setDate(limite.getDate() - 15);
-
-    for (const rep of reportesData) {
-      if (rep.fecha && rep.fecha.toDate() < limite && rep.fotoPath && !rep.fotoEliminada) {
-        try {
-          const fotoRef = ref(storage, rep.fotoPath);
-          await deleteObject(fotoRef);
-          await updateDoc(doc(db, 'reportes', rep.id), { 
-            fotoUrl: null, 
-            fotoPath: null, 
-            fotoEliminada: true 
-          });
-          console.log(`Foto eliminada por antiguedad: ${rep.fotoPath}`);
-        } catch (e) {
-          console.error("Error al borrar foto antigua:", e);
-        }
-      }
-    }
-  };
+  // Resetea la paginacion cuando cambian los filtros o la pestana
+  useEffect(() => {
+    setLimiteReportes(10);
+    setLimiteVehiculos(10);
+    setLimiteQRs(12);
+  }, [pestanaActiva, busqueda, filtroEstado, filtroTipoVehiculo]);
 
   useEffect(() => {
     if (pestanaActiva === 'reportes' || pestanaActiva === 'estadisticas') {
-      const cargarReportes = async () => {
+      const cargarReportesYLimpiar = async () => {
         try {
           const q = query(collection(db, 'reportes'), orderBy('fecha', 'asc'));
           const querySnapshot = await getDocs(q);
           const reportesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           
-          limpiarFotosAntiguas(reportesData);
-          setReportes(reportesData.reverse());
+          const limiteDias = new Date();
+          limiteDias.setDate(limiteDias.getDate() - 15);
+          
+          const reportesValidos = [];
+
+          for (const rep of reportesData) {
+            if (rep.fecha && rep.fecha.toDate() < limiteDias) {
+              try {
+                if (rep.fotoPath && !rep.fotoEliminada) {
+                  const fotoRef = ref(storage, rep.fotoPath);
+                  await deleteObject(fotoRef).catch(e => console.log(e));
+                }
+                await deleteDoc(doc(db, 'reportes', rep.id));
+                console.log(`Reporte eliminado por antiguedad (+15 dias): ${rep.id}`);
+              } catch (e) {
+                console.error("Error al borrar reporte antiguo:", e);
+              }
+            } else {
+              reportesValidos.push(rep);
+            }
+          }
+
+          setReportes(reportesValidos.reverse());
         } catch (error) {
           console.error(error);
         } finally {
           setCargandoReportes(false);
         }
       };
-      cargarReportes();
+      cargarReportesYLimpiar();
     }
   }, [pestanaActiva]);
 
@@ -145,6 +156,43 @@ export default function DashboardAdmin() {
       cargarQrs();
     }
   }, [pestanaActiva]);
+
+  const eliminarReporteIndividual = async (id: string, fotoPath: string | null) => {
+    const confirmar = window.confirm("Estas seguro de que deseas eliminar este registro de forma permanente?");
+    if (!confirmar) return;
+
+    try {
+      if (fotoPath) {
+        const fotoRef = ref(storage, fotoPath);
+        await deleteObject(fotoRef).catch(e => console.log("Error o foto ya borrada:", e));
+      }
+      await deleteDoc(doc(db, 'reportes', id));
+      setReportes(prev => prev.filter(r => r.id !== id));
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al eliminar el registro.");
+    }
+  };
+
+  const eliminarTodosLosReportes = async () => {
+    const confirmar = window.confirm("ADVERTENCIA: Vas a eliminar TODOS los registros diarios almacenados en la base de datos. Esto no se puede deshacer. Continuar?");
+    if (!confirmar) return;
+
+    try {
+      for (const rep of reportes) {
+        if (rep.fotoPath && !rep.fotoEliminada) {
+          const fotoRef = ref(storage, rep.fotoPath);
+          await deleteObject(fotoRef).catch(e => console.log(e));
+        }
+        await deleteDoc(doc(db, 'reportes', rep.id));
+      }
+      setReportes([]);
+      alert("Todos los registros han sido eliminados correctamente.");
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error durante la eliminacion masiva.");
+    }
+  };
 
   const registrarOActualizarVehiculo = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -314,12 +362,9 @@ export default function DashboardAdmin() {
   };
 
   const forzarDescarga = async (url: string, nombreArchivo: string) => {
-    // Detectar si el dispositivo es iOS (iPhone, iPad, iPod) o Safari en Mac
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
 
     if (esIOS) {
-      // En dispositivos Apple, abrimos el PDF en una nueva pestana.
-      // Safari lo renderiza nativamente y permite guardarlo desde el boton de compartir.
       window.open(url, '_blank');
       return;
     }
@@ -394,7 +439,6 @@ export default function DashboardAdmin() {
     setGenerandoPdf(null);
   };
 
-  // NUEVOS FILTROS CON TIPO DE VEHICULO
   const reportesFiltrados = reportes.filter(r => {
     const coincidePatente = r.vehiculoId?.toLowerCase().includes(busqueda.toLowerCase());
     let coincideEstado = true;
@@ -415,6 +459,10 @@ export default function DashboardAdmin() {
     const coincideTipo = filtroTipoVehiculo === 'todos' || q.tipo === filtroTipoVehiculo;
     return coincidePatente && coincideTipo;
   });
+
+  const reportesPaginados = reportesFiltrados.slice(0, limiteReportes);
+  const vehiculosPaginados = vehiculosFiltrados.slice(0, limiteVehiculos);
+  const qrsPaginados = qrsFiltrados.slice(0, limiteQRs);
 
   const estadisticas = useMemo(() => {
     if (!vehiculoEstadistica) return { datos: [], kpis: null };
@@ -536,12 +584,20 @@ export default function DashboardAdmin() {
         {/* CONTENIDO REPORTES */}
         {pestanaActiva === 'reportes' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
-            <div className="p-6 bg-slate-50 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="p-6 bg-slate-50 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
               <h2 className="text-xl font-bold text-slate-800">Registros Diarios {filtroTipoVehiculo !== 'todos' && <span className="text-sm font-normal text-slate-500">({filtroTipoVehiculo}s)</span>}</h2>
-              <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-                <button onClick={() => setFiltroEstado('todos')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'todos' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Todos</button>
-                <button onClick={() => setFiltroEstado('aprobados')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'aprobados' ? 'bg-green-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Aprobados</button>
-                <button onClick={() => setFiltroEstado('bloqueados')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'bloqueados' ? 'bg-red-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Bloqueados</button>
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                  <button onClick={() => setFiltroEstado('todos')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'todos' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Todos</button>
+                  <button onClick={() => setFiltroEstado('aprobados')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'aprobados' ? 'bg-green-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Aprobados</button>
+                  <button onClick={() => setFiltroEstado('bloqueados')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'bloqueados' ? 'bg-red-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Bloqueados</button>
+                </div>
+                {reportes.length > 0 && (
+                  <button onClick={eliminarTodosLosReportes} className="px-4 py-2 rounded-lg text-sm font-bold transition-all bg-red-600 text-white hover:bg-red-700 shadow-sm flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    Borrar Todos
+                  </button>
+                )}
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -551,15 +607,15 @@ export default function DashboardAdmin() {
                     <th className="p-4 font-bold">Fecha</th>
                     <th className="p-4 font-bold">Patente</th>
                     <th className="p-4 font-bold">Kilometraje</th>
-                    <th className="p-4 font-bold text-center">Checklist</th>
-                    <th className="p-4 font-bold">Estado</th>
+                    <th className="p-4 font-bold text-center">Estado</th>
                     <th className="p-4 font-bold text-center">Evidencia</th>
+                    <th className="p-4 font-bold text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {cargandoReportes ? (<tr><td colSpan={6} className="p-8 text-center text-slate-400">Cargando reportes...</td></tr>) 
-                  : reportesFiltrados.length === 0 ? (<tr><td colSpan={6} className="p-8 text-center text-slate-400">No se encontraron reportes.</td></tr>) 
-                  : reportesFiltrados.map((rep) => (
+                  : reportesPaginados.length === 0 ? (<tr><td colSpan={6} className="p-8 text-center text-slate-400">No se encontraron reportes.</td></tr>) 
+                  : reportesPaginados.map((rep) => (
                     <tr key={rep.id} className="hover:bg-slate-50">
                       <td className="p-4 text-slate-600 text-sm">{rep.fecha ? rep.fecha.toDate().toLocaleString() : 'Reciente'}</td>
                       <td className="p-4">
@@ -567,23 +623,31 @@ export default function DashboardAdmin() {
                         <span className="text-[10px] uppercase font-bold text-slate-400">{rep.tipoVehiculo || 'Desconocido'}</span>
                       </td>
                       <td className="p-4 text-slate-600 font-mono">{rep.kilometraje}</td>
-                      <td className="p-4 text-center">
-                        <button onClick={() => setReporteSeleccionado(rep)} className="text-xs font-bold px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-100">Ver Detalles</button>
-                      </td>
-                      <td className="p-4">{rep.fallaCritica ? <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200">BLOQUEADO</span> : <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200">APROBADO</span>}</td>
+                      <td className="p-4 text-center">{rep.fallaCritica ? <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200">BLOQUEADO</span> : <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200">APROBADO</span>}</td>
                       <td className="p-4 text-center">
                         {rep.fotoUrl ? (
                           <a href={rep.fotoUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-sm font-medium">Ver Foto</a>
                         ) : rep.fotoEliminada ? (
-                          <span className="text-slate-400 text-xs italic">Eliminada (+15d)</span>
+                          <span className="text-slate-400 text-xs italic">Eliminada</span>
                         ) : (
                           <span className="text-slate-400 text-sm">Sin foto</span>
                         )}
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="flex justify-center gap-2">
+                          <button onClick={() => setReporteSeleccionado(rep)} className="text-xs font-bold px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-100">Ver Detalles</button>
+                          <button onClick={() => eliminarReporteIndividual(rep.id, rep.fotoPath)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100">Eliminar</button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {reportesFiltrados.length > limiteReportes && (
+                <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+                  <button onClick={() => setLimiteReportes(prev => prev + 10)} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar más registros</button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -746,8 +810,8 @@ export default function DashboardAdmin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {vehiculosFiltrados.length === 0 ? (<tr><td colSpan={5} className="p-8 text-center text-slate-400">No se encontraron vehiculos.</td></tr>) 
-                    : vehiculosFiltrados.map((vehiculo) => {
+                    {vehiculosPaginados.length === 0 ? (<tr><td colSpan={5} className="p-8 text-center text-slate-400">No se encontraron vehiculos.</td></tr>) 
+                    : vehiculosPaginados.map((vehiculo) => {
                       const revInfo = calcularEstadoVencimiento(vehiculo.vencimientoRevision);
                       const circInfo = calcularEstadoVencimiento(vehiculo.vencimientoCirculacion);
                       const certInfo = calcularEstadoVencimiento(vehiculo.vencimientoCertificado);
@@ -799,6 +863,11 @@ export default function DashboardAdmin() {
                     })}
                   </tbody>
                 </table>
+                {vehiculosFiltrados.length > limiteVehiculos && (
+                  <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+                    <button onClick={() => setLimiteVehiculos(prev => prev + 10)} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar más vehículos</button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -807,14 +876,13 @@ export default function DashboardAdmin() {
         {/* CONTENIDO QRS */}
         {pestanaActiva === 'qrs' && (
           <div>
-            {qrsFiltrados.length === 0 ? (
+            {qrsPaginados.length === 0 ? (
               <div className="bg-white p-12 rounded-3xl shadow-lg text-center border border-slate-100">
                 <p className="text-slate-500 text-lg">No se encontraron codigos QR guardados.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {qrsFiltrados.map((qr) => {
-                  // Parche automatico para reescribir la URL al vuelo si tiene localhost o 127.0.0.1
+                {qrsPaginados.map((qr) => {
                   const urlCorregida = qr.url?.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, 'https://gestion-flota-web.vercel.app') || '';
 
                   return (
@@ -825,7 +893,6 @@ export default function DashboardAdmin() {
                         <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
                         <p className="text-xs text-slate-500 font-bold uppercase mb-4">{qr.tipo || 'Control de Flota'}</p>
                         <div className="bg-white p-2 rounded-xl border-4 border-slate-800 mb-4 shadow-sm">
-                          {/* Dibuja el QR con la URL corregida */}
                           <QRCodeSVG value={urlCorregida} size={130} level="H" includeMargin={false} />
                         </div>
                       </div>
@@ -836,7 +903,6 @@ export default function DashboardAdmin() {
                           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
                           <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">{qr.tipo || 'Control de Flota'}</p>
                           <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
-                            {/* Dibuja el QR interno del PDF con la URL corregida */}
                             <QRCodeSVG value={urlCorregida} size={220} level="H" includeMargin={false} />
                           </div>
                           <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar el checklist.</p>
@@ -847,7 +913,6 @@ export default function DashboardAdmin() {
                         <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-sm">
                           {generandoPdf === qr.patente ? '...' : 'Descargar'}
                         </button>
-                        {/* El enlace de probar navega a la URL corregida */}
                         <a href={urlCorregida} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-sm">Probar</a>
                       </div>
                       
@@ -855,6 +920,12 @@ export default function DashboardAdmin() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+            
+            {qrsFiltrados.length > limiteQRs && (
+              <div className="mt-8 text-center">
+                <button onClick={() => setLimiteQRs(prev => prev + 12)} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar más QRs</button>
               </div>
             )}
           </div>
