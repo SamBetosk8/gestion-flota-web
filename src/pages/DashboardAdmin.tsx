@@ -416,7 +416,7 @@ export default function DashboardAdmin() {
     const elemento = document.getElementById(`tarjeta-pdf-${patente}`);
     if (elemento) {
       try {
-        // Truco para Safari (iOS): Forzar carga previa del DOM
+        // Truco para Safari: Cargar en memoria antes
         await toPng(elemento, { cacheBust: true });
 
         const imgData = await toPng(elemento, { 
@@ -910,8 +910,8 @@ export default function DashboardAdmin() {
                         </div>
                       </div>
 
-                      {/* CAMBIO CLAVE: Position fixed con z-index negativo. Safari lo renderiza pero el usuario no lo ve */}
-                      <div style={{ position: 'fixed', left: 0, top: 0, zIndex: -10 }}>
+                      {/* CAMBIO CLAVE: position absolute con opacity 0. Invisible pero procesable por Safari */}
+                      <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
                         <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
                           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
