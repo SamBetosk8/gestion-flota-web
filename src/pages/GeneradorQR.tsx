@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
@@ -11,25 +11,9 @@ export default function GeneradorQR() {
   const [patente, setPatente] = useState('HBL123');
   const [tipoVehiculo, setTipoVehiculo] = useState('Camioneta');
   const [procesando, setProcesando] = useState(false);
-  const [logoBase64, setLogoBase64] = useState<string>(''); 
   
+  // URL de producción forzada para evitar el error de localhost
   const urlVehiculo = `https://gestion-flota-web.vercel.app/v/${patente.toUpperCase()}`;
-
-  useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-        setLogoBase64(canvas.toDataURL('image/png'));
-      }
-    };
-    img.src = '/logo.jpg';
-  }, []);
 
   const guardarYDescargar = async () => {
     if (!patente) return;
@@ -66,6 +50,10 @@ export default function GeneradorQR() {
 
       const elemento = document.getElementById('tarjeta-pdf-generador');
       if (elemento) {
+        // Truco para Safari (iOS): Una llamada previa fuerza la carga del DOM en memoria
+        await toPng(elemento, { cacheBust: true });
+
+        // Captura real
         const imgData = await toPng(elemento, { 
           quality: 1, 
           pixelRatio: 3,
@@ -102,11 +90,12 @@ export default function GeneradorQR() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative z-10 overflow-hidden">
       
-      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+      {/* CAMBIO CLAVE: Position fixed con z-index negativo. Safari lo renderiza pero el usuario no lo ve */}
+      <div style={{ position: 'fixed', left: 0, top: 0, zIndex: -10 }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px' }}>
-          <img src={LOGO_BASE64} alt="Logo" style={{ height: '90px', marginBottom: '30px' }} />
+          <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase()}</h2>
           <p className="text-lg text-slate-500 font-bold uppercase mb-10">{tipoVehiculo}</p>
           <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
@@ -147,8 +136,8 @@ export default function GeneradorQR() {
         <div className="flex flex-col gap-4">
           <button 
             onClick={guardarYDescargar} 
-            disabled={procesando || !logoBase64} 
-            className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${(procesando || !logoBase64) ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+            disabled={procesando} 
+            className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${procesando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
           >
             {procesando ? 'Procesando...' : 'Guardar y Descargar PDF'}
           </button>

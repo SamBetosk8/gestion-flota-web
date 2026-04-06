@@ -122,7 +122,6 @@ export default function DashboardAdmin() {
                   console.error("Error al borrar reporte antiguo:", e);
                 }
               } else {
-                // Arreglo retroactivo para reportes antiguos con el nombre separado
                 if (rep.tipoVehiculo === 'Semi remolque') rep.tipoVehiculo = 'Semirremolque';
                 reportesValidos.push(rep);
               }
@@ -155,7 +154,6 @@ export default function DashboardAdmin() {
           const querySnapshot = await getDocs(q);
           setQrsGuardados(querySnapshot.docs.map(doc => {
             const data = doc.data();
-            // Arreglo retroactivo
             if (data.tipo === 'Semi remolque') data.tipo = 'Semirremolque';
             return { id: doc.id, ...data };
           }));
@@ -418,6 +416,9 @@ export default function DashboardAdmin() {
     const elemento = document.getElementById(`tarjeta-pdf-${patente}`);
     if (elemento) {
       try {
+        // Truco para Safari (iOS): Forzar carga previa del DOM
+        await toPng(elemento, { cacheBust: true });
+
         const imgData = await toPng(elemento, { 
           quality: 1, 
           pixelRatio: 3,
@@ -909,7 +910,8 @@ export default function DashboardAdmin() {
                         </div>
                       </div>
 
-                      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+                      {/* CAMBIO CLAVE: Position fixed con z-index negativo. Safari lo renderiza pero el usuario no lo ve */}
+                      <div style={{ position: 'fixed', left: 0, top: 0, zIndex: -10 }}>
                         <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
                           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
