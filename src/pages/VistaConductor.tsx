@@ -194,16 +194,24 @@ export default function VistaConductor() {
     }
   };
 
+  // NUEVA FUNCION MEJORADA: Calcula exactamente los dias sin errores de zona horaria
   const calcularEstadoVencimiento = (fechaString: string) => {
     if (!fechaString) return { texto: 'No registrado', clase: 'text-slate-500 bg-slate-100 border-slate-200' };
-    const fechaVencimiento = new Date(fechaString);
+    
+    // Parseamos la fecha ignorando la zona horaria del navegador
+    const [year, month, day] = fechaString.split('-').map(Number);
+    const fechaVencimiento = new Date(year, month - 1, day);
+    
     const hoy = new Date();
-    const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
-    const diasRestantes = Math.ceil(diferenciaTiempo / (1000 * 3600 * 24));
+    hoy.setHours(0, 0, 0, 0);
 
-    if (diasRestantes < 0) return { texto: 'Vencido', clase: 'bg-red-100 text-red-700 border-red-200' };
-    if (diasRestantes <= 10) return { texto: 'Por vencer', clase: 'bg-orange-100 text-orange-700 border-orange-200' };
-    return { texto: 'Al dia', clase: 'bg-green-100 text-green-700 border-green-200' };
+    const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
+    const diasRestantes = Math.round(diferenciaTiempo / (1000 * 3600 * 24));
+
+    if (diasRestantes < 0) return { texto: `Venció hace ${Math.abs(diasRestantes)}d`, clase: 'bg-red-100 text-red-700 border-red-200' };
+    if (diasRestantes === 0) return { texto: 'Vence hoy', clase: 'bg-red-100 text-red-700 border-red-200' };
+    if (diasRestantes <= 15) return { texto: `Vence en ${diasRestantes}d`, clase: 'bg-orange-100 text-orange-700 border-orange-200' };
+    return { texto: `Al día (${diasRestantes}d)`, clase: 'bg-green-100 text-green-700 border-green-200' };
   };
 
   if (mostrarResumen) {
@@ -246,7 +254,7 @@ export default function VistaConductor() {
                 <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
                   <div className="flex flex-col items-center w-full">
                     <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
-                    <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
+                    <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
                   </div>
                   {vehiculo.urlRevision && (
                     <button 
@@ -262,7 +270,7 @@ export default function VistaConductor() {
                 <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
                   <div className="flex flex-col items-center w-full">
                     <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
-                    <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
+                    <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
                   </div>
                   {vehiculo.urlCirculacion && (
                     <button 
@@ -278,7 +286,7 @@ export default function VistaConductor() {
                 <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
                   <div className="flex flex-col items-center w-full">
                     <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
-                    <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
+                    <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
                   </div>
                   {vehiculo.urlCertificado && (
                     <button 
@@ -350,7 +358,7 @@ export default function VistaConductor() {
               <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
                 <div className="flex flex-col items-center w-full">
                   <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
-                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
+                  <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
                 </div>
                 {vehiculo.urlRevision && (
                   <button 
@@ -366,7 +374,7 @@ export default function VistaConductor() {
               <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
                 <div className="flex flex-col items-center w-full">
                   <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
-                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
+                  <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
                 </div>
                 {vehiculo.urlCirculacion && (
                   <button 
@@ -382,7 +390,7 @@ export default function VistaConductor() {
               <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
                 <div className="flex flex-col items-center w-full">
                   <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
-                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
+                  <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
                 </div>
                 {vehiculo.urlCertificado && (
                   <button 
