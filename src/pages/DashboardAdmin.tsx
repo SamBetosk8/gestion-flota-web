@@ -969,7 +969,8 @@ export default function DashboardAdmin() {
                         </div>
                       </div>
 
-                      <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0.01, pointerEvents: 'none', zIndex: -9999 }}>
+                      {/* CAMBIO CLAVE PARA ELIMINAR EL FANTASMA: Position absolute y opacity 0 */}
+                      <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
                         <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
                           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
