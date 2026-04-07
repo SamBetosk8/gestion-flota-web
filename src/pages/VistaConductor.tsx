@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 
 const preguntasPorTipo = {
@@ -50,10 +50,15 @@ export default function VistaConductor() {
   const { id } = useParams();
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
-  const [foto, setFoto] = useState<string | null>(null);
+  const [mostrarResumen, setMostrarResumen] = useState(false);
+  const [kilometrajeActual, setKilometrajeActual] = useState<number | null>(null);
+  
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [subiendo, setSubiendo] = useState(false);
   
   const [vehiculo, setVehiculo] = useState<any>(null);
+  const [vehiculoIdDoc, setVehiculoIdDoc] = useState<string | null>(null);
   const [cargandoVehiculo, setCargandoVehiculo] = useState(true);
 
   useEffect(() => {
@@ -66,6 +71,7 @@ export default function VistaConductor() {
         
         if (!querySnapshot.empty) {
           setVehiculo(querySnapshot.docs[0].data());
+          setVehiculoIdDoc(querySnapshot.docs[0].id);
         }
       } catch (error) {
         console.error(error);
@@ -75,6 +81,15 @@ export default function VistaConductor() {
     };
     cargarVehiculo();
   }, [id]);
+
+  useEffect(() => {
+    if (encuestaCompletada || bloqueado) {
+      const timer = setTimeout(() => {
+        setMostrarResumen(true);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [encuestaCompletada, bloqueado]);
 
   const forzarDescarga = async (url: string, nombreArchivo: string) => {
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
@@ -107,9 +122,12 @@ export default function VistaConductor() {
 
   const capturarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFotoFile(file);
+      
       const reader = new FileReader();
-      reader.onload = (event) => setFoto(event.target?.result as string);
-      reader.readAsDataURL(e.target.files[0]);
+      reader.onload = (event) => setFotoPreview(event.target?.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -118,9 +136,13 @@ export default function VistaConductor() {
     const formData = new FormData(e.currentTarget);
     const kilometrajeEscrito = formData.get('kilometraje') as string;
     
-    if (!foto && !kilometrajeEscrito) {
+    if (!fotoFile && !kilometrajeEscrito) {
       alert("Es obligatorio ingresar el kilometraje escrito o subir una foto del tablero.");
       return;
+    }
+
+    if (kilometrajeEscrito) {
+      setKilometrajeActual(Number(kilometrajeEscrito));
     }
 
     setSubiendo(true);
@@ -137,10 +159,10 @@ export default function VistaConductor() {
       let fotoUrl = null;
       let fotoPath = null;
       
-      if (foto) {
-        fotoPath = `kilometrajes/${id}-${Date.now()}.jpg`;
+      if (fotoFile) {
+        fotoPath = `kilometrajes/${id}-${Date.now()}-${fotoFile.name}`;
         const storageRef = ref(storage, fotoPath);
-        await uploadString(storageRef, foto, 'data_url');
+        await uploadBytes(storageRef, fotoFile);
         fotoUrl = await getDownloadURL(storageRef);
       }
 
@@ -155,12 +177,18 @@ export default function VistaConductor() {
         fecha: serverTimestamp()
       });
 
+      if (kilometrajeEscrito && vehiculoIdDoc) {
+        await updateDoc(doc(db, 'vehiculos', vehiculoIdDoc), {
+          kilometrajeActual: kilometrajeEscrito
+        });
+      }
+
       if (tieneFallaCritica) setBloqueado(true);
       else setEncuestaCompletada(true);
 
     } catch (error) {
       console.error(error);
-      alert("Hubo un error al enviar el reporte.");
+      alert("Hubo un error al enviar el reporte. Verifica tu conexion a internet.");
     } finally {
       setSubiendo(false);
     }
@@ -178,12 +206,112 @@ export default function VistaConductor() {
     return { texto: 'Al dia', clase: 'bg-green-100 text-green-700 border-green-200' };
   };
 
+  if (mostrarResumen) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-4">
+        <div className="max-w-md mx-auto bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 animate-fade-in">
+          
+          <div className={`p-6 text-white text-center ${bloqueado ? 'bg-red-600' : 'bg-blue-600'}`}>
+            <h1 className="text-2xl font-black">Resumen de Jornada</h1>
+            <p className="text-blue-100 font-mono text-lg mt-1 tracking-widest">{id}</p>
+            <p className={`text-xs font-black uppercase mt-2 inline-block px-3 py-1 rounded-full ${bloqueado ? 'bg-red-700 text-white' : 'bg-blue-700 text-white'}`}>
+              {bloqueado ? 'VEHICULO BLOQUEADO' : 'VEHICULO APROBADO'}
+            </p>
+          </div>
+
+          <div className="p-6">
+            
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 shadow-sm">
+              <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 text-center">Registro de Kilometraje</h2>
+              <div className="flex justify-between items-center px-2">
+                <div className="text-center">
+                  <p className="text-xs text-slate-500 font-bold mb-1">Actual</p>
+                  <p className="text-xl font-black text-slate-800">
+                    {kilometrajeActual ? `${kilometrajeActual.toLocaleString()} km` : 'Por foto'}
+                  </p>
+                </div>
+                <div className="h-8 w-px bg-slate-300"></div>
+                <div className="text-center">
+                  <p className="text-xs text-blue-500 font-bold mb-1">Proximo Taller</p>
+                  <p className="text-xl font-black text-blue-700">
+                    {vehiculo?.kilometrajeTaller ? `${Number(vehiculo.kilometrajeTaller).toLocaleString()} km` : 'Pendiente'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Descarga de Documentos</h2>
+            {vehiculo ? (
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
+                  <div className="flex flex-col items-center w-full">
+                    <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
+                    <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
+                  </div>
+                  {vehiculo.urlRevision && (
+                    <button 
+                      type="button"
+                      onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${id}.pdf`)} 
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                      Descargar
+                    </button>
+                  )}
+                </div>
+                <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
+                  <div className="flex flex-col items-center w-full">
+                    <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
+                    <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
+                  </div>
+                  {vehiculo.urlCirculacion && (
+                    <button 
+                      type="button"
+                      onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)} 
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                      Descargar
+                    </button>
+                  )}
+                </div>
+                <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
+                  <div className="flex flex-col items-center w-full">
+                    <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
+                    <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
+                  </div>
+                  {vehiculo.urlCertificado && (
+                    <button 
+                      type="button"
+                      onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${id}.pdf`)} 
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                      Descargar
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-center text-xs text-slate-500">Documentos no disponibles.</p>
+            )}
+
+            <button onClick={() => window.location.reload()} className="mt-8 w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors">
+              Finalizar y Volver
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (bloqueado) {
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4 text-center">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500 animate-fade-in">
           <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
-          <p className="mt-4 text-gray-600">Falla critica detectada. Avise al taller inmediatamente.</p>
+          <p className="mt-4 text-slate-600">Falla critica detectada. Avise al taller inmediatamente.</p>
+          <p className="mt-6 text-xs font-bold text-slate-400">Redirigiendo al resumen...</p>
         </div>
       </div>
     );
@@ -192,9 +320,10 @@ export default function VistaConductor() {
   if (encuestaCompletada) {
     return (
       <div className="min-h-screen bg-green-50 flex items-center justify-center p-4 text-center">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500 animate-fade-in">
           <h1 className="text-2xl font-black text-green-700">Reporte Enviado</h1>
-          <p className="mt-2 text-gray-600">Puede iniciar su jornada.</p>
+          <p className="mt-2 text-slate-600">Puede iniciar su jornada de manera segura.</p>
+          <p className="mt-6 text-xs font-bold text-slate-400">Redirigiendo al resumen...</p>
         </div>
       </div>
     );
@@ -211,69 +340,6 @@ export default function VistaConductor() {
           )}
         </div>
 
-        <div className="p-4 bg-slate-50 border-b border-slate-200">
-          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Estado de Documentos</h2>
-          
-          {cargandoVehiculo ? (
-            <p className="text-center text-xs text-slate-500">Verificando en base de datos...</p>
-          ) : vehiculo ? (
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
-                <div className="flex flex-col items-center w-full">
-                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
-                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
-                </div>
-                {vehiculo.urlRevision && (
-                  <button 
-                    type="button"
-                    onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${id}.pdf`)} 
-                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Descargar
-                  </button>
-                )}
-              </div>
-              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
-                <div className="flex flex-col items-center w-full">
-                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
-                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
-                </div>
-                {vehiculo.urlCirculacion && (
-                  <button 
-                    type="button"
-                    onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)} 
-                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Descargar
-                  </button>
-                )}
-              </div>
-              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
-                <div className="flex flex-col items-center w-full">
-                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
-                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
-                </div>
-                {vehiculo.urlCertificado && (
-                  <button 
-                    type="button"
-                    onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${id}.pdf`)} 
-                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Descargar
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-center">
-              <p className="text-xs text-red-600 font-bold">Vehiculo no registrado en la gestion de flota.</p>
-            </div>
-          )}
-        </div>
-
         <form onSubmit={manejarEnvio} className="p-6 space-y-6">
           <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <h2 className="font-bold text-slate-800 border-b border-slate-200 pb-2">Registro de Kilometraje</h2>
@@ -285,9 +351,9 @@ export default function VistaConductor() {
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">Foto del Tablero</label>
               <label className="block w-full cursor-pointer">
-                <input type="file" accept="image/*" capture="environment" onChange={capturarFoto} className="hidden" />
+                <input type="file" accept="image/*" onChange={capturarFoto} className="hidden" />
                 <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-4 text-center hover:bg-slate-100 transition-all">
-                  {foto ? <img src={foto} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Presiona para usar la camara</span>}
+                  {fotoPreview ? <img src={fotoPreview} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Seleccionar foto o abrir camara</span>}
                 </div>
               </label>
             </div>

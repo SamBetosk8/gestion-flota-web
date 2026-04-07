@@ -36,6 +36,8 @@ export default function DashboardAdmin() {
     vencimientoRevision: '',
     vencimientoCirculacion: '',
     vencimientoCertificado: '',
+    kilometrajeActual: '',
+    kilometrajeTaller: '',
     urlRevision: '',
     urlCirculacion: '',
     urlCertificado: ''
@@ -232,44 +234,40 @@ export default function DashboardAdmin() {
       const q = query(collection(db, 'vehiculos'), where('patente', '==', patenteMayuscula));
       const querySnapshot = await getDocs(q);
 
+      const datosVehiculo = {
+        tipo: formVehiculo.tipo,
+        vencimientoRevision: formVehiculo.vencimientoRevision,
+        vencimientoCirculacion: formVehiculo.vencimientoCirculacion,
+        vencimientoCertificado: formVehiculo.vencimientoCertificado,
+        kilometrajeActual: formVehiculo.kilometrajeActual,
+        kilometrajeTaller: formVehiculo.kilometrajeTaller,
+        urlRevision: urlRev,
+        urlCirculacion: urlCirc,
+        urlCertificado: urlCert
+      };
+
       if (!querySnapshot.empty) {
         const idVehiculoExistente = querySnapshot.docs[0].id;
-        await updateDoc(doc(db, 'vehiculos', idVehiculoExistente), {
-          tipo: formVehiculo.tipo,
-          vencimientoRevision: formVehiculo.vencimientoRevision,
-          vencimientoCirculacion: formVehiculo.vencimientoCirculacion,
-          vencimientoCertificado: formVehiculo.vencimientoCertificado,
-          urlRevision: urlRev,
-          urlCirculacion: urlCirc,
-          urlCertificado: urlCert
-        });
+        await updateDoc(doc(db, 'vehiculos', idVehiculoExistente), datosVehiculo);
         alert("Datos y documentos actualizados correctamente.");
       } else {
         await addDoc(collection(db, 'vehiculos'), {
+          ...datosVehiculo,
           patente: patenteMayuscula,
-          tipo: formVehiculo.tipo,
-          vencimientoRevision: formVehiculo.vencimientoRevision,
-          vencimientoCirculacion: formVehiculo.vencimientoCirculacion,
-          vencimientoCertificado: formVehiculo.vencimientoCertificado,
-          urlRevision: urlRev,
-          urlCirculacion: urlCirc,
-          urlCertificado: urlCert,
           fechaRegistro: serverTimestamp()
         });
         alert("Vehiculo registrado correctamente.");
       }
 
-      setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', urlRevision: '', urlCirculacion: '', urlCertificado: '' });
+      setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '' });
       setPdfRevision(null);
       setPdfCirculacion(null);
       setPdfCertificado(null);
       
       const fileRev = document.getElementById('file-rev') as HTMLInputElement;
       if (fileRev) fileRev.value = "";
-      
       const fileCirc = document.getElementById('file-circ') as HTMLInputElement;
       if (fileCirc) fileCirc.value = "";
-      
       const fileCert = document.getElementById('file-cert') as HTMLInputElement;
       if (fileCert) fileCert.value = "";
 
@@ -286,9 +284,11 @@ export default function DashboardAdmin() {
     setFormVehiculo({
       patente: vehiculo.patente,
       tipo: vehiculo.tipo === 'Semi remolque' ? 'Semirremolque' : (vehiculo.tipo || 'Camioneta'),
-      vencimientoRevision: vehiculo.vencimientoRevision,
-      vencimientoCirculacion: vehiculo.vencimientoCirculacion,
+      vencimientoRevision: vehiculo.vencimientoRevision || '',
+      vencimientoCirculacion: vehiculo.vencimientoCirculacion || '',
       vencimientoCertificado: vehiculo.vencimientoCertificado || '',
+      kilometrajeActual: vehiculo.kilometrajeActual || '',
+      kilometrajeTaller: vehiculo.kilometrajeTaller || '',
       urlRevision: vehiculo.urlRevision || '',
       urlCirculacion: vehiculo.urlCirculacion || '',
       urlCertificado: vehiculo.urlCertificado || ''
@@ -347,6 +347,8 @@ export default function DashboardAdmin() {
             vencimientoRevision: '',
             vencimientoCirculacion: '',
             vencimientoCertificado: '',
+            kilometrajeActual: '',
+            kilometrajeTaller: '',
             urlRevision: '',
             urlCirculacion: '',
             urlCertificado: '',
@@ -416,7 +418,6 @@ export default function DashboardAdmin() {
     const elemento = document.getElementById(`tarjeta-pdf-${patente}`);
     if (elemento) {
       try {
-        // Truco para Safari: Cargar en memoria antes
         await toPng(elemento, { cacheBust: true });
 
         const imgData = await toPng(elemento, { 
@@ -721,6 +722,17 @@ export default function DashboardAdmin() {
                     </select>
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Km Actual</label>
+                    <input type="number" value={formVehiculo.kilometrajeActual} onChange={(e) => setFormVehiculo({...formVehiculo, kilometrajeActual: e.target.value})} placeholder="Ej: 15000" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Prox. Taller</label>
+                    <input type="number" value={formVehiculo.kilometrajeTaller} onChange={(e) => setFormVehiculo({...formVehiculo, kilometrajeTaller: e.target.value})} placeholder="Ej: 25000" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </div>
+                </div>
                 
                 <div className="pt-2 border-t border-slate-100">
                   <label className="block text-sm font-medium text-slate-600 mb-1">Rev. Tecnica</label>
@@ -808,7 +820,7 @@ export default function DashboardAdmin() {
 
                 <div className="flex gap-2 mt-6 pt-4">
                   <button type="submit" disabled={guardandoVehiculo} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-all">{guardandoVehiculo ? 'Guardando...' : 'Guardar Datos'}</button>
-                  <button type="button" onClick={() => setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', urlRevision: '', urlCirculacion: '', urlCertificado: '' })} className="px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all">Limpiar</button>
+                  <button type="button" onClick={() => setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '' })} className="px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all">Limpiar</button>
                 </div>
               </form>
             </div>
@@ -819,7 +831,7 @@ export default function DashboardAdmin() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-white text-slate-600 text-xs uppercase tracking-wider border-b border-slate-100">
-                      <th className="p-4 font-bold">Patente</th><th className="p-4 font-bold">Rev. Tecnica</th><th className="p-4 font-bold">Permiso Circ.</th><th className="p-4 font-bold">Certificado</th><th className="p-4 font-bold text-center">Acciones</th>
+                      <th className="p-4 font-bold">Vehiculo</th><th className="p-4 font-bold">Rev. Tecnica</th><th className="p-4 font-bold">Permiso Circ.</th><th className="p-4 font-bold">Certificado</th><th className="p-4 font-bold text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -832,7 +844,12 @@ export default function DashboardAdmin() {
                         <tr key={vehiculo.id} className="hover:bg-slate-50">
                           <td className="p-4">
                             <span className="font-black text-slate-800 text-lg block">{vehiculo.patente}</span>
-                            <span className="text-[10px] font-bold text-slate-500 uppercase">{vehiculo.tipo || 'Camioneta'}</span>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">{vehiculo.tipo || 'Camioneta'}</span>
+                            <div className="flex gap-2 text-[10px] bg-slate-100 px-2 py-1 rounded-md inline-flex border border-slate-200">
+                              <span className="font-medium text-slate-600">KM: <span className="font-bold text-slate-800">{vehiculo.kilometrajeActual || '--'}</span></span>
+                              <span className="text-slate-300">|</span>
+                              <span className="font-medium text-blue-600">Taller: <span className="font-bold">{vehiculo.kilometrajeTaller || '--'}</span></span>
+                            </div>
                           </td>
                           <td className="p-4">
                             <div className="flex flex-col items-start gap-2">
@@ -910,7 +927,6 @@ export default function DashboardAdmin() {
                         </div>
                       </div>
 
-                      {/* CAMBIO CLAVE: position absolute con opacity 0. Invisible pero procesable por Safari */}
                       <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
                         <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
