@@ -7,6 +7,7 @@ import VistaConductor from './pages/VistaConductor';
 import DashboardAdmin from './pages/DashboardAdmin';
 import GeneradorQR from './pages/GeneradorQR';
 import Login from './pages/Login';
+import AgendarHora from './pages/AgendarHora'; // NUEVA VISTA
 
 function RutaPrivada({ children }: { children: React.ReactNode }) {
   const [usuario, setUsuario] = useState<any>(null);
@@ -33,8 +34,9 @@ function App() {
         {/* Redirigir la raiz al login */}
         <Route path="/" element={<Navigate to="/login" />} />
         
-        {/* Ruta Publica para el chofer */}
+        {/* Rutas Publicas para el chofer */}
         <Route path="/v/:id" element={<VistaConductor />} />
+        <Route path="/agendar/:id" element={<AgendarHora />} />
         
         {/* Ruta de Login */}
         <Route path="/login" element={<Login />} />

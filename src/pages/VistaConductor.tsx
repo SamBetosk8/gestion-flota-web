@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
@@ -194,11 +194,9 @@ export default function VistaConductor() {
     }
   };
 
-  // NUEVA FUNCION MEJORADA: Calcula exactamente los dias sin errores de zona horaria
   const calcularEstadoVencimiento = (fechaString: string) => {
     if (!fechaString) return { texto: 'No registrado', clase: 'text-slate-500 bg-slate-100 border-slate-200' };
     
-    // Parseamos la fecha ignorando la zona horaria del navegador
     const [year, month, day] = fechaString.split('-').map(Number);
     const fechaVencimiento = new Date(year, month - 1, day);
     
@@ -231,20 +229,26 @@ export default function VistaConductor() {
             
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 shadow-sm">
               <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 text-center">Registro de Kilometraje</h2>
-              <div className="flex justify-between items-center px-2">
-                <div className="text-center">
+              <div className="flex justify-between items-stretch px-2">
+                <div className="text-center flex-1 flex flex-col justify-center">
                   <p className="text-xs text-slate-500 font-bold mb-1">Actual</p>
                   <p className="text-xl font-black text-slate-800">
                     {kilometrajeActual ? `${kilometrajeActual.toLocaleString()} km` : 'Por foto'}
                   </p>
                 </div>
-                <div className="h-8 w-px bg-slate-300"></div>
-                <div className="text-center">
+                
+                <div className="w-px bg-slate-300 mx-2"></div>
+                
+                <Link to={`/agendar/${id}`} className="text-center flex-1 block hover:bg-blue-50 p-2 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-blue-200 group">
                   <p className="text-xs text-blue-500 font-bold mb-1">Proximo Taller</p>
                   <p className="text-xl font-black text-blue-700">
                     {vehiculo?.kilometrajeTaller ? `${Number(vehiculo.kilometrajeTaller).toLocaleString()} km` : 'Pendiente'}
                   </p>
-                </div>
+                  <div className="mt-2 flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-wider text-blue-500 group-hover:text-blue-700 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    Agendar Hora
+                  </div>
+                </Link>
               </div>
             </div>
 
@@ -345,69 +349,6 @@ export default function VistaConductor() {
           <p className="text-blue-100 font-mono text-lg mt-1 tracking-widest">{id}</p>
           {!cargandoVehiculo && vehiculo?.tipo && (
             <p className="text-white text-xs font-black uppercase mt-2 bg-blue-700 inline-block px-3 py-1 rounded-full">{vehiculo.tipo}</p>
-          )}
-        </div>
-
-        <div className="p-4 bg-slate-50 border-b border-slate-200">
-          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Estado de Documentos</h2>
-          
-          {cargandoVehiculo ? (
-            <p className="text-center text-xs text-slate-500">Verificando en base de datos...</p>
-          ) : vehiculo ? (
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
-                <div className="flex flex-col items-center w-full">
-                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
-                  <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
-                </div>
-                {vehiculo.urlRevision && (
-                  <button 
-                    type="button"
-                    onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${id}.pdf`)} 
-                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Descargar
-                  </button>
-                )}
-              </div>
-              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
-                <div className="flex flex-col items-center w-full">
-                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
-                  <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
-                </div>
-                {vehiculo.urlCirculacion && (
-                  <button 
-                    type="button"
-                    onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)} 
-                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Descargar
-                  </button>
-                )}
-              </div>
-              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
-                <div className="flex flex-col items-center w-full">
-                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
-                  <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
-                </div>
-                {vehiculo.urlCertificado && (
-                  <button 
-                    type="button"
-                    onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${id}.pdf`)} 
-                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Descargar
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-center">
-              <p className="text-xs text-red-600 font-bold">Vehiculo no registrado en la gestion de flota.</p>
-            </div>
           )}
         </div>
 

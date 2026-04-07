@@ -23,6 +23,7 @@ export default function DashboardAdmin() {
   const [limiteQRs, setLimiteQRs] = useState(12);
   
   const [reportes, setReportes] = useState<any[]>([]);
+  const [citas, setCitas] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
   const [reporteSeleccionado, setReporteSeleccionado] = useState<any | null>(null);
   
@@ -88,6 +89,36 @@ export default function DashboardAdmin() {
       setVehiculos(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const cargarCitas = async () => {
+    try {
+      const q = query(collection(db, 'citas_taller'), orderBy('fecha', 'desc'));
+      const querySnapshot = await getDocs(q);
+      setCitas(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const actualizarEstadoCita = async (idCita: string, nuevoEstado: string) => {
+    try {
+      await updateDoc(doc(db, 'citas_taller', idCita), { estado: nuevoEstado });
+      cargarCitas();
+    } catch (error) {
+      console.error("Error actualizando cita:", error);
+    }
+  };
+
+  const eliminarCita = async (idCita: string) => {
+    const confirmar = window.confirm("¿Seguro que deseas eliminar esta cita permanentemente?");
+    if (!confirmar) return;
+    try {
+      await deleteDoc(doc(db, 'citas_taller', idCita));
+      cargarCitas();
+    } catch (error) {
+      console.error("Error borrando cita:", error);
     }
   };
 
@@ -165,6 +196,10 @@ export default function DashboardAdmin() {
       };
       cargarQrs();
     }
+  }, [pestanaActiva]);
+
+  useEffect(() => {
+    if (pestanaActiva === 'agenda') cargarCitas();
   }, [pestanaActiva]);
 
   const eliminarReporteIndividual = async (id: string, fotoPath: string | null) => {
@@ -403,14 +438,20 @@ export default function DashboardAdmin() {
 
   const calcularEstadoVencimiento = (fechaString: string) => {
     if (!fechaString) return { texto: 'No registrado', clase: 'text-slate-500 bg-slate-100 border-slate-200' };
-    const fechaVencimiento = new Date(fechaString);
+    
+    const [year, month, day] = fechaString.split('-').map(Number);
+    const fechaVencimiento = new Date(year, month - 1, day);
+    
     const hoy = new Date();
-    const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
-    const diasRestantes = Math.ceil(diferenciaTiempo / (1000 * 3600 * 24));
+    hoy.setHours(0, 0, 0, 0);
 
-    if (diasRestantes < 0) return { texto: `Vencido (${Math.abs(diasRestantes)}d)`, clase: 'bg-red-100 text-red-700 font-bold border-red-200' };
-    if (diasRestantes <= 10) return { texto: `Vence en ${diasRestantes}d`, clase: 'bg-orange-100 text-orange-700 font-bold border-orange-200' };
-    return { texto: `OK`, clase: 'bg-green-100 text-green-700 font-bold border-green-200' };
+    const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
+    const diasRestantes = Math.round(diferenciaTiempo / (1000 * 3600 * 24));
+
+    if (diasRestantes < 0) return { texto: `Venció hace ${Math.abs(diasRestantes)}d`, clase: 'bg-red-100 text-red-700 font-bold border-red-200' };
+    if (diasRestantes === 0) return { texto: 'Vence hoy', clase: 'bg-red-100 text-red-700 border-red-200' };
+    if (diasRestantes <= 15) return { texto: `Vence en ${diasRestantes}d`, clase: 'bg-orange-100 text-orange-700 font-bold border-orange-200' };
+    return { texto: `Al día (${diasRestantes}d)`, clase: 'bg-green-100 text-green-700 font-bold border-green-200' };
   };
 
   const descargarPDF = async (patente: string) => {
@@ -591,6 +632,7 @@ export default function DashboardAdmin() {
           <button onClick={() => setPestanaActiva('reportes')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'reportes' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Historial</button>
           <button onClick={() => setPestanaActiva('vehiculos')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'vehiculos' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Flota</button>
           <button onClick={() => setPestanaActiva('qrs')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'qrs' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Codigos QR</button>
+          <button onClick={() => setPestanaActiva('agenda')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'agenda' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Agenda Taller</button>
           <button onClick={() => setPestanaActiva('estadisticas')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'estadisticas' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Estadisticas</button>
           <button onClick={() => setPestanaActiva('usuarios')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'usuarios' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Usuarios</button>
         </div>
@@ -927,7 +969,7 @@ export default function DashboardAdmin() {
                         </div>
                       </div>
 
-                      <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
+                      <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0.01, pointerEvents: 'none', zIndex: -9999 }}>
                         <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
                           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
@@ -958,6 +1000,63 @@ export default function DashboardAdmin() {
                 <button onClick={() => setLimiteQRs(prev => prev + 12)} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas QRs</button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* CONTENIDO AGENDA TALLER */}
+        {pestanaActiva === 'agenda' && (
+          <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
+            <div className="p-6 bg-slate-50 border-b border-slate-100">
+              <h2 className="text-xl font-bold text-slate-800">Citas Agendadas</h2>
+              <p className="text-sm text-slate-500 mt-1">Administra las horas que los conductores han reservado.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-white text-slate-600 text-sm uppercase tracking-wider border-b border-slate-100">
+                    <th className="p-4 font-bold">Fecha / Hora</th>
+                    <th className="p-4 font-bold">Vehiculo</th>
+                    <th className="p-4 font-bold text-center">Estado</th>
+                    <th className="p-4 font-bold text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {citas.length === 0 ? (
+                    <tr><td colSpan={4} className="p-8 text-center text-slate-400">No hay citas agendadas.</td></tr>
+                  ) : (
+                    citas.map((cita) => (
+                      <tr key={cita.id} className="hover:bg-slate-50">
+                        <td className="p-4">
+                          <span className="font-bold text-slate-800 block">{cita.fecha}</span>
+                          <span className="text-sm font-medium text-slate-500">{cita.hora}</span>
+                        </td>
+                        <td className="p-4 font-black text-blue-600 text-lg">{cita.patente}</td>
+                        <td className="p-4 text-center">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                            cita.estado === 'pendiente' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
+                            cita.estado === 'completada' ? 'bg-green-100 text-green-700 border-green-200' : 
+                            'bg-red-100 text-red-700 border-red-200'
+                          }`}>
+                            {cita.estado.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex justify-center gap-2">
+                            {cita.estado === 'pendiente' && (
+                              <>
+                                <button onClick={() => actualizarEstadoCita(cita.id, 'completada')} className="text-xs font-bold px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 border border-green-200">Completar</button>
+                                <button onClick={() => actualizarEstadoCita(cita.id, 'cancelada')} className="text-xs font-bold px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 border border-slate-200">Cancelar</button>
+                              </>
+                            )}
+                            <button onClick={() => eliminarCita(cita.id)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 border border-red-200">Eliminar</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
