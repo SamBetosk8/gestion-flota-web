@@ -6,13 +6,15 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+firebase-debug.log*
 
+# Dependencias
 node_modules
 dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# Editor y Sistema Operativo
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -22,3 +24,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# VARIABLES DE ENTORNO (Archivos Seguros)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+
+# Firebase Cache
+.firebase/
