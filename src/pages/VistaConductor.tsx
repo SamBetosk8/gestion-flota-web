@@ -340,6 +340,69 @@ export default function VistaConductor() {
           )}
         </div>
 
+        <div className="p-4 bg-slate-50 border-b border-slate-200">
+          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Estado de Documentos</h2>
+          
+          {cargandoVehiculo ? (
+            <p className="text-center text-xs text-slate-500">Verificando en base de datos...</p>
+          ) : vehiculo ? (
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
+                <div className="flex flex-col items-center w-full">
+                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
+                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
+                </div>
+                {vehiculo.urlRevision && (
+                  <button 
+                    type="button"
+                    onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${id}.pdf`)} 
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Descargar
+                  </button>
+                )}
+              </div>
+              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
+                <div className="flex flex-col items-center w-full">
+                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
+                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
+                </div>
+                {vehiculo.urlCirculacion && (
+                  <button 
+                    type="button"
+                    onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)} 
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Descargar
+                  </button>
+                )}
+              </div>
+              <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
+                <div className="flex flex-col items-center w-full">
+                  <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
+                  <span className="text-sm font-bold">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
+                </div>
+                {vehiculo.urlCertificado && (
+                  <button 
+                    type="button"
+                    onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${id}.pdf`)} 
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Descargar
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-center">
+              <p className="text-xs text-red-600 font-bold">Vehiculo no registrado en la gestion de flota.</p>
+            </div>
+          )}
+        </div>
+
         <form onSubmit={manejarEnvio} className="p-6 space-y-6">
           <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <h2 className="font-bold text-slate-800 border-b border-slate-200 pb-2">Registro de Kilometraje</h2>
