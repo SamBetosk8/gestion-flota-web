@@ -99,7 +99,6 @@ export default function AgendarHora() {
         hora: horaSeleccionada,
         estado: 'pendiente',
         motivo: fallaEspecifica || 'Mantenimiento preventivo',
-        // ESTOS CAMPOS ASEGURAN EL REGISTRO DEL MODELO DE TU JEFE
         tipoTaller: 'Externo Asociado',
         esquemaPago: '80% Taller / 20% Ecopanta',
         fechaRegistro: serverTimestamp()

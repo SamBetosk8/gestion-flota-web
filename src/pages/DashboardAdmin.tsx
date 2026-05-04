@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, query, orderBy, getDocs, deleteDoc, doc, where, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, deleteDoc, doc, where, updateDoc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getAuth, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { initializeApp, deleteApp } from 'firebase/app';
@@ -52,7 +52,9 @@ export default function DashboardAdmin() {
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
 
   const [vehiculoEstadistica, setVehiculoEstadistica] = useState<string>('');
-  const [formUsuario, setFormUsuario] = useState({ email: '', password: '' });
+  
+  // Estado modificado para incluir el rol
+  const [formUsuario, setFormUsuario] = useState({ email: '', password: '', rol: 'admin' });
   const [creandoUsuario, setCreandoUsuario] = useState(false);
 
   const manejarCerrarSesion = async () => {
@@ -71,10 +73,18 @@ export default function DashboardAdmin() {
     try {
       const secondaryApp = initializeApp(firebaseConfig, "Secondary");
       const secondaryAuth = getAuth(secondaryApp);
-      await createUserWithEmailAndPassword(secondaryAuth, formUsuario.email, formUsuario.password);
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, formUsuario.email, formUsuario.password);
+      
+      // Guardar el rol del usuario en Firestore
+      await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
+        email: formUsuario.email,
+        rol: formUsuario.rol,
+        fechaCreacion: serverTimestamp()
+      });
+
       await deleteApp(secondaryApp);
-      alert("Usuario administrador creado exitosamente.");
-      setFormUsuario({ email: '', password: '' });
+      alert("Usuario creado exitosamente.");
+      setFormUsuario({ email: '', password: '', rol: 'admin' });
     } catch (error: any) {
       console.error(error);
       alert(`Error al crear usuario.`);
@@ -1124,7 +1134,7 @@ export default function DashboardAdmin() {
         {pestanaActiva === 'usuarios' && (
           <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 max-w-md mx-auto">
             <div className="mb-6 border-b border-slate-100 pb-4 text-center">
-              <h2 className="text-xl font-bold text-slate-800">Crear Administrador</h2>
+              <h2 className="text-xl font-bold text-slate-800">Crear Usuario</h2>
               <p className="text-sm text-slate-500 mt-1">Registra nuevos accesos al panel.</p>
             </div>
             <form onSubmit={crearNuevoUsuario} className="space-y-4">
@@ -1136,8 +1146,15 @@ export default function DashboardAdmin() {
                 <label className="block text-sm font-medium text-slate-600 mb-1">Contrasena (Minimo 6 caracteres)</label>
                 <input type="password" required minLength={6} value={formUsuario.password} onChange={(e) => setFormUsuario({...formUsuario, password: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••" />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Tipo de Usuario</label>
+                <select value={formUsuario.rol} onChange={(e) => setFormUsuario({...formUsuario, rol: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                  <option value="admin">Administrador General</option>
+                  <option value="taller">Taller Externo Asociado</option>
+                </select>
+              </div>
               <button type="submit" disabled={creandoUsuario} className={`w-full font-bold py-4 rounded-xl mt-4 transition-all shadow-md ${creandoUsuario ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white hover:bg-slate-900'}`}>
-                {creandoUsuario ? 'Creando cuenta...' : 'Registrar Administrador'}
+                {creandoUsuario ? 'Creando cuenta...' : 'Registrar Usuario'}
               </button>
             </form>
           </div>
