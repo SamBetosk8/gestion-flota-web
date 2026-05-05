@@ -54,7 +54,8 @@ export default function DashboardAdmin() {
 
   const [vehiculoEstadistica, setVehiculoEstadistica] = useState<string>('');
   
-  const [formUsuario, setFormUsuario] = useState({ email: '', password: '', rol: 'admin' });
+  // Estado modificado para incluir nombre y ubicacion del taller
+  const [formUsuario, setFormUsuario] = useState({ email: '', password: '', rol: 'admin', nombreTaller: '', ubicacionTaller: '' });
   const [creandoUsuario, setCreandoUsuario] = useState(false);
 
   const manejarCerrarSesion = async () => {
@@ -78,12 +79,16 @@ export default function DashboardAdmin() {
       await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
         email: formUsuario.email,
         rol: formUsuario.rol,
+        ...(formUsuario.rol === 'taller' && {
+          nombreTaller: formUsuario.nombreTaller,
+          ubicacionTaller: formUsuario.ubicacionTaller
+        }),
         fechaCreacion: serverTimestamp()
       });
 
       await deleteApp(secondaryApp);
       alert("Usuario creado exitosamente.");
-      setFormUsuario({ email: '', password: '', rol: 'admin' });
+      setFormUsuario({ email: '', password: '', rol: 'admin', nombreTaller: '', ubicacionTaller: '' });
     } catch (error: any) {
       console.error(error);
       alert(`Error al crear usuario.`);
@@ -1039,13 +1044,14 @@ export default function DashboardAdmin() {
                   <tr className="bg-white text-slate-600 text-sm uppercase tracking-wider border-b border-slate-100">
                     <th className="p-4 font-bold">Fecha / Hora</th>
                     <th className="p-4 font-bold">Vehiculo</th>
+                    <th className="p-4 font-bold">Taller Destino</th>
                     <th className="p-4 font-bold text-center">Estado</th>
                     <th className="p-4 font-bold text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {citas.length === 0 ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-slate-400">No hay citas agendadas.</td></tr>
+                    <tr><td colSpan={5} className="p-8 text-center text-slate-400">No hay citas agendadas.</td></tr>
                   ) : (
                     citas.map((cita) => (
                       <tr key={cita.id} className="hover:bg-slate-50">
@@ -1054,6 +1060,7 @@ export default function DashboardAdmin() {
                           <span className="text-sm font-medium text-slate-500">{cita.hora}</span>
                         </td>
                         <td className="p-4 font-black text-blue-600 text-lg">{cita.patente}</td>
+                        <td className="p-4 text-sm font-medium text-slate-600">{cita.tipoTaller || 'Taller Externo'}</td>
                         <td className="p-4 text-center">
                           <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
                             cita.estado === 'pendiente' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
@@ -1254,6 +1261,20 @@ export default function DashboardAdmin() {
                   <option value="taller">Taller Externo Asociado</option>
                 </select>
               </div>
+              
+              {formUsuario.rol === 'taller' && (
+                <div className="space-y-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-1">Nombre del Taller</label>
+                    <input type="text" required value={formUsuario.nombreTaller} onChange={(e) => setFormUsuario({...formUsuario, nombreTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: LubriLoa" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-1">Ubicacion / Direccion</label>
+                    <input type="text" required value={formUsuario.ubicacionTaller} onChange={(e) => setFormUsuario({...formUsuario, ubicacionTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Vicuña Mackenna 2945, Calama" />
+                  </div>
+                </div>
+              )}
+
               <button type="submit" disabled={creandoUsuario} className={`w-full font-bold py-4 rounded-xl mt-4 transition-all shadow-md ${creandoUsuario ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white hover:bg-slate-900'}`}>
                 {creandoUsuario ? 'Creando cuenta...' : 'Registrar Usuario'}
               </button>

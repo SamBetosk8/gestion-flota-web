@@ -14,13 +14,32 @@ export default function AgendarHora() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Estados para la recomendación de taller
+  // Estados para la seleccion de taller
+  const [talleres, setTalleres] = useState<any[]>([]);
+  const [tallerSeleccionado, setTallerSeleccionado] = useState('');
+  
   const [categoriaTaller, setCategoriaTaller] = useState('mecanico');
   const [fallaEspecifica, setFallaEspecifica] = useState<string | null>(null);
 
   const hoy = new Date().toISOString().split('T')[0];
 
-  // 1. Analizar el último reporte para detectar el tipo de falla (Corregido sin orderBy de Firebase)
+  useEffect(() => {
+    const cargarTalleres = async () => {
+      try {
+        const q = query(collection(db, 'usuarios'), where('rol', '==', 'taller'));
+        const snapshot = await getDocs(q);
+        const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setTalleres(lista);
+        if (lista.length > 0) {
+          setTallerSeleccionado(lista[0].id);
+        }
+      } catch (error) {
+        console.error("Error cargando talleres:", error);
+      }
+    };
+    cargarTalleres();
+  }, []);
+
   useEffect(() => {
     const analizarUltimoReporte = async () => {
       if (!id) return;
@@ -29,12 +48,11 @@ export default function AgendarHora() {
         const snapshot = await getDocs(q);
         
         if (!snapshot.empty) {
-          // Ordenamos usando JavaScript para evitar el error de Indice de Firebase
           const reportes = snapshot.docs.map(doc => doc.data());
           reportes.sort((a, b) => {
             const timeA = a.fecha?.toMillis ? a.fecha.toMillis() : 0;
             const timeB = b.fecha?.toMillis ? b.fecha.toMillis() : 0;
-            return timeB - timeA; // Mayor a menor (mas reciente primero)
+            return timeB - timeA;
           });
           
           const reporte = reportes[0];
@@ -42,7 +60,6 @@ export default function AgendarHora() {
           if (reporte.fallaCritica && reporte.respuestas) {
             const resp = reporte.respuestas;
             
-            // Lógica de clasificación basada en los IDs del checklist
             if (resp['luces_frontales'] === 'no' || resp['luces_traseras'] === 'no' || resp['luces_remolque'] === 'no' || resp['luces_altas_bajas'] === 'no' || resp['luces_freno_interm'] === 'no') {
               setCategoriaTaller('electrico automotriz');
               setFallaEspecifica('Falla eléctrica (Luces)');
@@ -68,15 +85,17 @@ export default function AgendarHora() {
     analizarUltimoReporte();
   }, [id]);
 
-  // 2. Cargar horas ocupadas
   useEffect(() => {
-    if (!fecha) return;
+    if (!fecha || !tallerSeleccionado) return;
     const cargarHorasOcupadas = async () => {
       setCargando(true);
       try {
         const q = query(collection(db, 'citas_taller'), where('fecha', '==', fecha));
         const snapshot = await getDocs(q);
-        const ocupadas = snapshot.docs.map(doc => doc.data().hora);
+        const ocupadas = snapshot.docs
+          .map(doc => doc.data())
+          .filter(data => data.tallerId === tallerSeleccionado)
+          .map(data => data.hora);
         setHorasOcupadas(ocupadas);
         setHoraSeleccionada('');
       } catch (error) {
@@ -86,13 +105,16 @@ export default function AgendarHora() {
       }
     };
     cargarHorasOcupadas();
-  }, [fecha]);
+  }, [fecha, tallerSeleccionado]);
 
   const confirmarReserva = async () => {
-    if (!fecha || !horaSeleccionada || !id) return;
+    if (!fecha || !horaSeleccionada || !id || !tallerSeleccionado) return;
     
     const confirmar = window.confirm(`¿Confirmar solicitud de taller externo para el vehiculo ${id} el día ${fecha} a las ${horaSeleccionada}?`);
     if (!confirmar) return;
+
+    const tallerDestino = talleres.find(t => t.id === tallerSeleccionado);
+    const nombreTallerDestino = tallerDestino ? `${tallerDestino.nombreTaller} - ${tallerDestino.ubicacionTaller}` : 'Externo Asociado';
 
     setGuardando(true);
     try {
@@ -103,11 +125,12 @@ export default function AgendarHora() {
         hora: horaSeleccionada,
         estado: 'pendiente',
         motivo: fallaEspecifica || 'Mantenimiento preventivo',
-        tipoTaller: 'Externo Asociado',
+        tipoTaller: nombreTallerDestino,
+        tallerId: tallerSeleccionado,
         esquemaPago: '80% Taller / 20% Ecopanta',
         fechaRegistro: serverTimestamp()
       });
-      alert('Solicitud enviada. La administración te derivará al taller externo correspondiente.');
+      alert('Solicitud enviada exitosamente.');
       navigate(`/v/${id}`);
     } catch (error) {
       console.error(error);
@@ -128,10 +151,10 @@ export default function AgendarHora() {
 
         <div className="mb-8">
           <label className="block text-sm font-bold text-slate-600 mb-2 uppercase tracking-wide">
-            1. Agendar Taller Asociado
+            1. Seleccionar Taller y Agendar
           </label>
           <p className="text-xs text-slate-500 mb-4">
-            Selecciona fecha y hora. La administración coordinará tu ingreso con un taller especialista externo.
+            Selecciona el taller de la lista y la fecha para tu ingreso.
           </p>
 
           {fallaEspecifica && (
@@ -141,18 +164,35 @@ export default function AgendarHora() {
             </div>
           )}
 
+          {talleres.length > 0 ? (
+            <select 
+              value={tallerSeleccionado} 
+              onChange={(e) => setTallerSeleccionado(e.target.value)}
+              className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all mb-4"
+            >
+              {talleres.map(t => (
+                <option key={t.id} value={t.id}>{t.nombreTaller} ({t.ubicacionTaller})</option>
+              ))}
+            </select>
+          ) : (
+            <div className="p-4 bg-yellow-50 text-yellow-700 rounded-2xl mb-4 text-sm font-bold border border-yellow-200">
+              No hay talleres asociados registrados en el sistema. Contacta a administración.
+            </div>
+          )}
+
           <input 
             type="date" 
             min={hoy}
             value={fecha} 
             onChange={(e) => setFecha(e.target.value)} 
+            disabled={talleres.length === 0}
             className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all mb-4" 
           />
 
-          {fecha && (
+          {fecha && talleres.length > 0 && (
             <div className="animate-fade-in">
               {cargando ? (
-                <p className="text-center text-sm text-slate-400 py-4">Verificando disponibilidad...</p>
+                <p className="text-center text-sm text-slate-400 py-4">Verificando disponibilidad en taller...</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 mb-6">
                   {HORAS_DISPONIBLES.map(h => {
@@ -182,9 +222,9 @@ export default function AgendarHora() {
 
           <button 
             onClick={confirmarReserva} 
-            disabled={!fecha || !horaSeleccionada || guardando} 
+            disabled={!fecha || !horaSeleccionada || guardando || talleres.length === 0} 
             className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${
-              !fecha || !horaSeleccionada || guardando 
+              !fecha || !horaSeleccionada || guardando || talleres.length === 0
                 ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
                 : 'bg-slate-800 text-white hover:bg-slate-900'
             }`}

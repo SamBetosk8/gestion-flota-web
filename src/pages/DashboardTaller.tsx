@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, getDocs, doc, updateDoc, addDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, addDoc, serverTimestamp, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 
@@ -45,10 +45,19 @@ export default function DashboardTaller() {
 
   const cargarCitas = async () => {
     try {
-      // Las citas si se pueden ordenar por fecha de creacion porque Firebase lo permite con campos simples
-      const q = query(collection(db, 'citas_taller'), orderBy('fecha', 'desc'));
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      const q = query(collection(db, 'citas_taller'), where('tallerId', '==', user.uid));
       const querySnapshot = await getDocs(q);
-      setCitas(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      
+      const citasData = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      citasData.sort((a, b) => {
+         return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
+      });
+      
+      setCitas(citasData);
     } catch (error) {
       console.error(error);
     }
@@ -83,7 +92,6 @@ export default function DashboardTaller() {
         setOtExistente(snapOT.docs[0].data());
       }
 
-      // CORRECCIÓN: Buscamos sin orderBy para que Firebase no falle y luego lo ordenamos aquí
       const qReporte = query(collection(db, 'reportes'), where('vehiculoId', '==', cita.patente));
       const snapReporte = await getDocs(qReporte);
       if (!snapReporte.empty) {
@@ -158,6 +166,9 @@ export default function DashboardTaller() {
           <div className="lg:col-span-1 bg-white rounded-3xl shadow-lg border border-slate-100 overflow-hidden h-fit">
             <div className="p-4 bg-slate-800 text-white font-bold">Vehículos Asignados</div>
             <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+              {citas.length === 0 && (
+                <p className="p-6 text-center text-sm text-slate-400">No hay vehículos asignados a este taller aún.</p>
+              )}
               {citas.map(cita => (
                 <button 
                   key={cita.id} 
