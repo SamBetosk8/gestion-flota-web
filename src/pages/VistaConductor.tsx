@@ -141,8 +141,16 @@ export default function VistaConductor() {
       return;
     }
 
+    // Validacion para que el kilometraje nuevo no sea menor que el anterior
     if (kilometrajeEscrito) {
-      setKilometrajeActual(Number(kilometrajeEscrito));
+      const kmNuevo = Number(kilometrajeEscrito);
+      const kmAnterior = Number(vehiculo?.kilometrajeActual) || 0;
+      
+      if (kmNuevo < kmAnterior) {
+        alert(`Error: El kilometraje ingresado (${kmNuevo} km) no puede ser menor al ultimo registrado (${kmAnterior} km). Por favor, verifica el dato.`);
+        return;
+      }
+      setKilometrajeActual(kmNuevo);
     }
 
     setSubiendo(true);
@@ -195,7 +203,7 @@ export default function VistaConductor() {
   };
 
   const calcularEstadoVencimiento = (fechaString: string) => {
-    if (!fechaString) return { texto: 'No registrado', clase: 'text-slate-500 bg-slate-100 border-slate-200' };
+    if (!fechaString) return { texto: 'No registrado', clase: 'bg-slate-100 text-slate-500 border-slate-200' };
     
     const [year, month, day] = fechaString.split('-').map(Number);
     const fechaVencimiento = new Date(year, month - 1, day);
@@ -206,10 +214,10 @@ export default function VistaConductor() {
     const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
     const diasRestantes = Math.round(diferenciaTiempo / (1000 * 3600 * 24));
 
-    if (diasRestantes < 0) return { texto: `Venció hace ${Math.abs(diasRestantes)}d`, clase: 'bg-red-100 text-red-700 border-red-200' };
-    if (diasRestantes === 0) return { texto: 'Vence hoy', clase: 'bg-red-100 text-red-700 border-red-200' };
-    if (diasRestantes <= 15) return { texto: `Vence en ${diasRestantes}d`, clase: 'bg-orange-100 text-orange-700 border-orange-200' };
-    return { texto: `Al día (${diasRestantes}d)`, clase: 'bg-green-100 text-green-700 border-green-200' };
+    if (diasRestantes < 0) return { texto: `Venció hace ${Math.abs(diasRestantes)}d`, clase: 'bg-red-100 text-red-700 border-red-300' };
+    if (diasRestantes === 0) return { texto: 'Vence hoy', clase: 'bg-red-100 text-red-700 border-red-300' };
+    if (diasRestantes <= 15) return { texto: `Vence en ${diasRestantes}d`, clase: 'bg-orange-100 text-orange-700 border-orange-300' };
+    return { texto: `Al día (${diasRestantes}d)`, clase: 'bg-green-100 text-green-700 border-green-300' };
   };
 
   if (mostrarResumen) {
@@ -255,7 +263,7 @@ export default function VistaConductor() {
             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Descarga de Documentos</h2>
             {vehiculo ? (
               <div className="grid grid-cols-3 gap-3 text-center">
-                <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
+                <div className={`p-2 rounded-2xl border-2 flex flex-col justify-between items-center shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
                   <div className="flex flex-col items-center w-full">
                     <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
                     <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
@@ -264,14 +272,15 @@ export default function VistaConductor() {
                     <button 
                       type="button"
                       onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${id}.pdf`)} 
-                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow-md transition-all active:transform active:scale-95"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                       Descargar
                     </button>
                   )}
                 </div>
-                <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
+                
+                <div className={`p-2 rounded-2xl border-2 flex flex-col justify-between items-center shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
                   <div className="flex flex-col items-center w-full">
                     <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
                     <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
@@ -280,14 +289,15 @@ export default function VistaConductor() {
                     <button 
                       type="button"
                       onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)} 
-                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow-md transition-all active:transform active:scale-95"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                       Descargar
                     </button>
                   )}
                 </div>
-                <div className={`p-3 rounded-2xl border flex flex-col justify-between items-center bg-white shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
+                
+                <div className={`p-2 rounded-2xl border-2 flex flex-col justify-between items-center shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
                   <div className="flex flex-col items-center w-full">
                     <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
                     <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
@@ -296,7 +306,7 @@ export default function VistaConductor() {
                     <button 
                       type="button"
                       onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${id}.pdf`)} 
-                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-2 rounded-xl shadow-md transition-all active:transform active:scale-95"
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow-md transition-all active:transform active:scale-95"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                       Descargar
@@ -322,7 +332,7 @@ export default function VistaConductor() {
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4 text-center">
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500 animate-fade-in">
           <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
-          <p className="mt-4 text-slate-600">Falla critica detectada. Avise al taller inmediatamente.</p>
+          <p className="mt-4 text-slate-600">Falla critica detectada. Avise a administracion inmediatamente.</p>
           <p className="mt-6 text-xs font-bold text-slate-400">Redirigiendo al resumen...</p>
         </div>
       </div>
@@ -356,16 +366,28 @@ export default function VistaConductor() {
           <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <h2 className="font-bold text-slate-800 border-b border-slate-200 pb-2">Registro de Kilometraje</h2>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Escribir Kilometraje</label>
-              <input type="number" name="kilometraje" placeholder="Ej: 150000" className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+              <label className="block text-sm font-medium text-slate-600 mb-1">
+                Escribir Kilometraje
+                {vehiculo?.kilometrajeActual && (
+                  <span className="text-blue-600 font-bold ml-2">(Anterior: {vehiculo.kilometrajeActual} km)</span>
+                )}
+              </label>
+              <input 
+                type="number" 
+                name="kilometraje" 
+                min={vehiculo?.kilometrajeActual || 0}
+                placeholder={vehiculo?.kilometrajeActual ? `Mayor a ${vehiculo.kilometrajeActual}` : "Ej: 150000"} 
+                className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+              />
             </div>
             <div className="text-center text-slate-400 text-sm font-bold">O</div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">Foto del Tablero</label>
               <label className="block w-full cursor-pointer">
-                <input type="file" accept="image/*" onChange={capturarFoto} className="hidden" />
+                {/* CAMBIO CLAVE: Se agrego capture="environment" para forzar la camara trasera */}
+                <input type="file" accept="image/*" capture="environment" onChange={capturarFoto} className="hidden" />
                 <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-4 text-center hover:bg-slate-100 transition-all">
-                  {fotoPreview ? <img src={fotoPreview} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm">Seleccionar foto o abrir camara</span>}
+                  {fotoPreview ? <img src={fotoPreview} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm font-bold text-blue-600">Tomar foto con la cámara</span>}
                 </div>
               </label>
             </div>

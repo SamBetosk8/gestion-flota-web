@@ -12,8 +12,8 @@ export default function DashboardTaller() {
   const [otExistente, setOtExistente] = useState<any | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [vehiculoData, setVehiculoData] = useState<any>(null);
+  const [proxMantenimiento, setProxMantenimiento] = useState<string>('');
 
-  // Formulario Camioneta
   const [formCamioneta, setFormCamioneta] = useState({
     tipoMantenimiento: 'Preventivo',
     cambioAceiteGeneral: false,
@@ -28,7 +28,6 @@ export default function DashboardTaller() {
     descripcionTrabajo: ''
   });
 
-  // Formulario Pesado (Tracto/Semirremolque)
   const [formPesado, setFormPesado] = useState({
     tipoMtto: 'Preventivo',
     empresaTecnico: '',
@@ -48,7 +47,7 @@ export default function DashboardTaller() {
     try {
       const q = query(collection(db, 'citas_taller'), orderBy('fecha', 'desc'));
       const querySnapshot = await getDocs(q);
-      setCitas(querySnapshot.docs.map(d => ({ id: doc.id, ...d.data() })));
+      setCitas(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (error) {
       console.error(error);
     }
@@ -63,12 +62,18 @@ export default function DashboardTaller() {
     setChecklist(null);
     setOtExistente(null);
     setVehiculoData(null);
+    setProxMantenimiento('');
 
     try {
       const qVehiculo = query(collection(db, 'vehiculos'), where('patente', '==', cita.patente));
       const snapVehiculo = await getDocs(qVehiculo);
       if (!snapVehiculo.empty) {
-        setVehiculoData(snapVehiculo.docs[0].data());
+        const vDoc = snapVehiculo.docs[0];
+        const vData = vDoc.data();
+        setVehiculoData({ id: vDoc.id, ...vData });
+        
+        const kmActual = Number(vData.kilometrajeActual) || 0;
+        setProxMantenimiento(String(kmActual + 10000));
       }
 
       const qOT = query(collection(db, 'ordenes_trabajo'), where('idCita', '==', cita.id));
@@ -113,7 +118,13 @@ export default function DashboardTaller() {
         estado: 'completada'
       });
 
-      alert("Orden de Trabajo guardada exitosamente.");
+      if (proxMantenimiento) {
+        await updateDoc(doc(db, 'vehiculos', vehiculoData.id), {
+          kilometrajeTaller: proxMantenimiento
+        });
+      }
+
+      alert("Orden de Trabajo guardada y proximo mantenimiento actualizado.");
       seleccionarCita(citaSeleccionada);
       cargarCitas();
     } catch (error) {
@@ -166,7 +177,14 @@ export default function DashboardTaller() {
             ) : (
               <>
                 <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
-                  <h2 className="text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">Checklist Previo (Reporte Conductor)</h2>
+                  <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                    <h2 className="text-lg font-black text-slate-800">Checklist Previo (Reporte Conductor)</h2>
+                    {vehiculoData && (
+                      <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
+                        KM Actual: {vehiculoData.kilometrajeActual || 'No registrado'}
+                      </span>
+                    )}
+                  </div>
                   {checklist ? (
                     <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                       {Object.entries(checklist.respuestas || {}).map(([k, v]) => (
@@ -195,62 +213,77 @@ export default function DashboardTaller() {
                     </div>
                   ) : !vehiculoData ? (
                     <p className="text-sm text-slate-500">Cargando datos del vehículo...</p>
-                  ) : vehiculoData.tipo === 'Camioneta' ? (
-                    <div className="space-y-4">
-                      <div className="flex gap-4 mb-4">
-                        <label className="flex items-center gap-2"><input type="radio" name="tipoM" checked={formCamioneta.tipoMantenimiento === 'Preventivo'} onChange={() => setFormCamioneta({...formCamioneta, tipoMantenimiento: 'Preventivo'})} /> Preventivo</label>
-                        <label className="flex items-center gap-2"><input type="radio" name="tipoM" checked={formCamioneta.tipoMantenimiento === 'Correctivo'} onChange={() => setFormCamioneta({...formCamioneta, tipoMantenimiento: 'Correctivo'})} /> Correctivo</label>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {['cambioAceiteGeneral', 'cambioAceiteMotor', 'cambioAceiteTransmision', 'cambioFiltro', 'suspension', 'frenos', 'embrague', 'cajaCambios'].map((item) => (
-                          <label key={item} className="flex items-center gap-2 text-sm text-slate-700 p-2 bg-slate-50 rounded border border-slate-100">
-                            <input type="checkbox" checked={(formCamioneta as any)[item]} onChange={(e) => setFormCamioneta({...formCamioneta, [item]: e.target.checked})} />
-                            {item.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                          </label>
-                        ))}
-                      </div>
-                      <textarea placeholder="Descripción del trabajo realizado..." value={formCamioneta.descripcionTrabajo} onChange={e => setFormCamioneta({...formCamioneta, descripcionTrabajo: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm mt-4"></textarea>
-                      <textarea placeholder="Observaciones adicionales..." value={formCamioneta.observaciones} onChange={e => setFormCamioneta({...formCamioneta, observaciones: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm"></textarea>
-                    </div>
                   ) : (
-                    <div className="space-y-6">
-                       <div className="grid grid-cols-2 gap-4">
-                        <input type="text" placeholder="Empresa/Técnico" value={formPesado.empresaTecnico} onChange={e => setFormPesado({...formPesado, empresaTecnico: e.target.value})} className="p-3 border border-slate-200 rounded-xl text-sm" />
-                        <input type="number" placeholder="Horas de Parada" value={formPesado.horasParada} onChange={e => setFormPesado({...formPesado, horasParada: e.target.value})} className="p-3 border border-slate-200 rounded-xl text-sm" />
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-700 mb-2">Descripción de Tareas</h3>
-                        {formPesado.tareas.map((tarea, idx) => (
-                          <div key={idx} className="flex gap-2 mb-2">
-                            <input type="text" placeholder="Tarea" value={tarea.descripcion} onChange={e => { const n = [...formPesado.tareas]; n[idx].descripcion = e.target.value; setFormPesado({...formPesado, tareas: n}); }} className="flex-1 p-2 border rounded text-xs" />
-                            <input type="number" placeholder="Horas" value={tarea.horas} onChange={e => { const n = [...formPesado.tareas]; n[idx].horas = e.target.value; setFormPesado({...formPesado, tareas: n}); }} className="w-20 p-2 border rounded text-xs" />
-                            <input type="date" value={tarea.fInicio} onChange={e => { const n = [...formPesado.tareas]; n[idx].fInicio = e.target.value; setFormPesado({...formPesado, tareas: n}); }} className="w-32 p-2 border rounded text-xs" />
-                            <input type="date" value={tarea.fFin} onChange={e => { const n = [...formPesado.tareas]; n[idx].fFin = e.target.value; setFormPesado({...formPesado, tareas: n}); }} className="w-32 p-2 border rounded text-xs" />
-                          </div>
-                        ))}
-                        <button onClick={agregarFilaTarea} className="text-xs font-bold text-blue-600 hover:underline">+ Agregar Tarea</button>
+                    <>
+                      <div className="mb-6 bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                        <label className="block text-xs font-black text-indigo-800 uppercase tracking-widest mb-2">Programar Próximo Mantenimiento (KM)</label>
+                        <div className="flex items-center gap-4">
+                          <input 
+                            type="number" 
+                            value={proxMantenimiento} 
+                            onChange={(e) => setProxMantenimiento(e.target.value)} 
+                            className="p-3 border border-indigo-200 rounded-xl font-bold text-indigo-900 focus:outline-none w-48"
+                          />
+                          <span className="text-sm text-indigo-600 font-medium">Calculado automáticamente a +10.000 km</span>
+                        </div>
                       </div>
 
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-700 mb-2">Repuestos / Consumibles</h3>
-                        {formPesado.repuestos.map((rep, idx) => (
-                          <div key={idx} className="flex gap-2 mb-2">
-                            <input type="number" placeholder="Cant." value={rep.cant} onChange={e => { const n = [...formPesado.repuestos]; n[idx].cant = e.target.value; setFormPesado({...formPesado, repuestos: n}); }} className="w-20 p-2 border rounded text-xs" />
-                            <input type="text" placeholder="Unidad" value={rep.unidad} onChange={e => { const n = [...formPesado.repuestos]; n[idx].unidad = e.target.value; setFormPesado({...formPesado, repuestos: n}); }} className="w-24 p-2 border rounded text-xs" />
-                            <input type="text" placeholder="Descripción Repuesto" value={rep.descripcion} onChange={e => { const n = [...formPesado.repuestos]; n[idx].descripcion = e.target.value; setFormPesado({...formPesado, repuestos: n}); }} className="flex-1 p-2 border rounded text-xs" />
+                      {vehiculoData.tipo === 'Camioneta' ? (
+                        <div className="space-y-4">
+                          <div className="flex gap-4 mb-4">
+                            <label className="flex items-center gap-2"><input type="radio" name="tipoM" checked={formCamioneta.tipoMantenimiento === 'Preventivo'} onChange={() => setFormCamioneta({...formCamioneta, tipoMantenimiento: 'Preventivo'})} /> Preventivo</label>
+                            <label className="flex items-center gap-2"><input type="radio" name="tipoM" checked={formCamioneta.tipoMantenimiento === 'Correctivo'} onChange={() => setFormCamioneta({...formCamioneta, tipoMantenimiento: 'Correctivo'})} /> Correctivo</label>
                           </div>
-                        ))}
-                        <button onClick={agregarFilaRepuesto} className="text-xs font-bold text-blue-600 hover:underline">+ Agregar Repuesto</button>
-                      </div>
-                      <textarea placeholder="Observaciones..." value={formPesado.observaciones} onChange={e => setFormPesado({...formPesado, observaciones: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm"></textarea>
-                    </div>
-                  )}
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {['cambioAceiteGeneral', 'cambioAceiteMotor', 'cambioAceiteTransmision', 'cambioFiltro', 'suspension', 'frenos', 'embrague', 'cajaCambios'].map((item) => (
+                              <label key={item} className="flex items-center gap-2 text-sm text-slate-700 p-2 bg-slate-50 rounded border border-slate-100">
+                                <input type="checkbox" checked={(formCamioneta as any)[item]} onChange={(e) => setFormCamioneta({...formCamioneta, [item]: e.target.checked})} />
+                                {item.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                              </label>
+                            ))}
+                          </div>
+                          <textarea placeholder="Descripción del trabajo realizado..." value={formCamioneta.descripcionTrabajo} onChange={e => setFormCamioneta({...formCamioneta, descripcionTrabajo: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm mt-4"></textarea>
+                          <textarea placeholder="Observaciones adicionales..." value={formCamioneta.observaciones} onChange={e => setFormCamioneta({...formCamioneta, observaciones: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm"></textarea>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                           <div className="grid grid-cols-2 gap-4">
+                            <input type="text" placeholder="Empresa/Técnico" value={formPesado.empresaTecnico} onChange={e => setFormPesado({...formPesado, empresaTecnico: e.target.value})} className="p-3 border border-slate-200 rounded-xl text-sm" />
+                            <input type="number" placeholder="Horas de Parada" value={formPesado.horasParada} onChange={e => setFormPesado({...formPesado, horasParada: e.target.value})} className="p-3 border border-slate-200 rounded-xl text-sm" />
+                          </div>
+                          
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-700 mb-2">Descripción de Tareas</h3>
+                            {formPesado.tareas.map((tarea, idx) => (
+                              <div key={idx} className="flex gap-2 mb-2">
+                                <input type="text" placeholder="Tarea" value={tarea.descripcion} onChange={e => { const n = [...formPesado.tareas]; n[idx].descripcion = e.target.value; setFormPesado({...formPesado, tareas: n}); }} className="flex-1 p-2 border rounded text-xs" />
+                                <input type="number" placeholder="Horas" value={tarea.horas} onChange={e => { const n = [...formPesado.tareas]; n[idx].horas = e.target.value; setFormPesado({...formPesado, tareas: n}); }} className="w-20 p-2 border rounded text-xs" />
+                                <input type="date" value={tarea.fInicio} onChange={e => { const n = [...formPesado.tareas]; n[idx].fInicio = e.target.value; setFormPesado({...formPesado, tareas: n}); }} className="w-32 p-2 border rounded text-xs" />
+                                <input type="date" value={tarea.fFin} onChange={e => { const n = [...formPesado.tareas]; n[idx].fFin = e.target.value; setFormPesado({...formPesado, tareas: n}); }} className="w-32 p-2 border rounded text-xs" />
+                              </div>
+                            ))}
+                            <button onClick={agregarFilaTarea} className="text-xs font-bold text-blue-600 hover:underline">+ Agregar Tarea</button>
+                          </div>
 
-                  {!otExistente && vehiculoData && (
-                    <button onClick={guardarOT} disabled={guardando} className="mt-6 w-full bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition-all">
-                      {guardando ? 'Guardando OT...' : 'Generar y Cerrar OT'}
-                    </button>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-700 mb-2">Repuestos / Consumibles</h3>
+                            {formPesado.repuestos.map((rep, idx) => (
+                              <div key={idx} className="flex gap-2 mb-2">
+                                <input type="number" placeholder="Cant." value={rep.cant} onChange={e => { const n = [...formPesado.repuestos]; n[idx].cant = e.target.value; setFormPesado({...formPesado, repuestos: n}); }} className="w-20 p-2 border rounded text-xs" />
+                                <input type="text" placeholder="Unidad" value={rep.unidad} onChange={e => { const n = [...formPesado.repuestos]; n[idx].unidad = e.target.value; setFormPesado({...formPesado, repuestos: n}); }} className="w-24 p-2 border rounded text-xs" />
+                                <input type="text" placeholder="Descripción Repuesto" value={rep.descripcion} onChange={e => { const n = [...formPesado.repuestos]; n[idx].descripcion = e.target.value; setFormPesado({...formPesado, repuestos: n}); }} className="flex-1 p-2 border rounded text-xs" />
+                              </div>
+                            ))}
+                            <button onClick={agregarFilaRepuesto} className="text-xs font-bold text-blue-600 hover:underline">+ Agregar Repuesto</button>
+                          </div>
+                          <textarea placeholder="Observaciones..." value={formPesado.observaciones} onChange={e => setFormPesado({...formPesado, observaciones: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm"></textarea>
+                        </div>
+                      )}
+
+                      <button onClick={guardarOT} disabled={guardando} className="mt-6 w-full bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition-all">
+                        {guardando ? 'Guardando OT...' : 'Generar y Cerrar OT'}
+                      </button>
+                    </>
                   )}
                 </div>
               </>

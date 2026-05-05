@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 import { LOGO_BASE64 } from '../constants';
 
 export default function Login() {
@@ -15,9 +16,29 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setCargando(true);
+    
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate('/admin'); // Redirige al panel si es exitoso
+      // 1. Iniciar sesión en Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // 2. Buscar el rol del usuario en la colección de Firestore
+      try {
+        const userDocRef = doc(db, 'usuarios', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        // 3. Redirigir según el rol
+        if (userDocSnap.exists() && userDocSnap.data().rol === 'taller') {
+          navigate('/taller');
+        } else {
+          // Si no existe el documento o es admin, enviarlo al panel principal
+          navigate('/admin');
+        }
+      } catch (firestoreErr) {
+        console.error("Error al obtener rol, redirigiendo a admin por defecto:", firestoreErr);
+        navigate('/admin');
+      }
+
     } catch (err: any) {
       setError('Credenciales incorrectas. Verifica tu correo y contraseña.');
     } finally {
@@ -49,7 +70,7 @@ export default function Login() {
               value={email} 
               onChange={(e) => setEmail(e.target.value)}
               className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all font-medium"
-              placeholder="admin@empresa.com"
+              placeholder="correo@empresa.com"
             />
           </div>
           <div>
