@@ -77,7 +77,6 @@ export default function VistaConductor() {
           setVehiculo(vData);
           setVehiculoIdDoc(snapVehiculo.docs[0].id);
 
-          // Extraemos el kilometraje actual guardado en el perfil del vehiculo
           const kmRealAnterior = Number(vData.kilometrajeActual) || 0;
           setKilometrajeAnterior(kmRealAnterior);
           setKilometraje(kmRealAnterior > 0 ? kmRealAnterior.toString() : '');
@@ -153,10 +152,9 @@ export default function VistaConductor() {
     if (kilometrajeEscrito) {
       const kmNuevo = Number(kilometrajeEscrito);
       
-      // Validacion estricta contra el kilometraje anterior
       if (kmNuevo < kilometrajeAnterior) {
         alert(`Error: El kilometraje ingresado (${kmNuevo} km) no puede ser menor al ultimo registro exacto (${kilometrajeAnterior} km). Por favor, verifica el dato.`);
-        return; // Detiene el envio
+        return;
       }
       setKilometrajeActual(kmNuevo);
     }
@@ -228,6 +226,31 @@ export default function VistaConductor() {
     return { texto: `Al día (${diasRestantes}d)`, clase: 'bg-green-100 text-green-700 border-green-300' };
   };
 
+  const renderDocInfo = (titulo: string, fecha: string, url: string, nombreArchivo: string) => {
+    const estado = calcularEstadoVencimiento(fecha);
+    const fechaFormateada = fecha ? fecha.split('-').reverse().join('-') : 'Sin fecha';
+
+    return (
+      <div className={`p-2 rounded-2xl border-2 flex flex-col justify-between items-center shadow-sm ${estado.clase}`}>
+        <div className="flex flex-col items-center w-full mb-2">
+          <span className="text-[10px] uppercase font-black opacity-70 mb-1">{titulo}</span>
+          <span className="text-xs font-black text-slate-800">{fechaFormateada}</span>
+          <span className="text-[10px] font-bold leading-tight mt-1 text-center">{estado.texto}</span>
+        </div>
+        {url && (
+          <button 
+            type="button"
+            onClick={() => forzarDescarga(url, nombreArchivo)} 
+            className="mt-auto w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow-md transition-all active:transform active:scale-95"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            Descargar
+          </button>
+        )}
+      </div>
+    );
+  };
+
   if (mostrarResumen) {
     return (
       <div className="min-h-screen bg-slate-50 p-4">
@@ -249,16 +272,16 @@ export default function VistaConductor() {
                 <div className="text-center flex-1 flex flex-col justify-center">
                   <p className="text-xs text-slate-500 font-bold mb-1">Actual</p>
                   <p className="text-xl font-black text-slate-800">
-                    {kilometrajeActual ? `${kilometrajeActual.toLocaleString()} km` : 'Por foto'}
+                    {kilometrajeActual ? `${kilometrajeActual.toLocaleString('es-CL')} km` : 'Por foto'}
                   </p>
                 </div>
                 
                 <div className="w-px bg-slate-300 mx-2"></div>
                 
                 <Link to={`/agendar/${id}`} className="text-center flex-1 block hover:bg-blue-50 p-2 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-blue-200 group">
-                  <p className="text-xs text-blue-500 font-bold mb-1">Proximo Taller</p>
+                  <p className="text-xs text-blue-500 font-bold mb-1">Próximo Taller</p>
                   <p className="text-xl font-black text-blue-700">
-                    {vehiculo?.kilometrajeTaller ? `${Number(vehiculo.kilometrajeTaller).toLocaleString()} km` : 'Pendiente'}
+                    {vehiculo?.kilometrajeTaller ? `${Number(vehiculo.kilometrajeTaller).toLocaleString('es-CL')} km` : 'Pendiente'}
                   </p>
                   <div className="mt-2 flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-wider text-blue-500 group-hover:text-blue-700 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -271,56 +294,9 @@ export default function VistaConductor() {
             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Descarga de Documentos</h2>
             {vehiculo ? (
               <div className="grid grid-cols-3 gap-3 text-center">
-                <div className={`p-2 rounded-2xl border-2 flex flex-col justify-between items-center shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoRevision).clase}`}>
-                  <div className="flex flex-col items-center w-full">
-                    <span className="text-[10px] uppercase font-black opacity-70 mb-1">Rev. Tecnica</span>
-                    <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoRevision).texto}</span>
-                  </div>
-                  {vehiculo.urlRevision && (
-                    <button 
-                      type="button"
-                      onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${id}.pdf`)} 
-                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow-md transition-all active:transform active:scale-95"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                      Descargar
-                    </button>
-                  )}
-                </div>
-                
-                <div className={`p-2 rounded-2xl border-2 flex flex-col justify-between items-center shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).clase}`}>
-                  <div className="flex flex-col items-center w-full">
-                    <span className="text-[10px] uppercase font-black opacity-70 mb-1">Permiso Circ.</span>
-                    <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCirculacion).texto}</span>
-                  </div>
-                  {vehiculo.urlCirculacion && (
-                    <button 
-                      type="button"
-                      onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)} 
-                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow-md transition-all active:transform active:scale-95"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                      Descargar
-                    </button>
-                  )}
-                </div>
-                
-                <div className={`p-2 rounded-2xl border-2 flex flex-col justify-between items-center shadow-sm ${calcularEstadoVencimiento(vehiculo.vencimientoCertificado).clase}`}>
-                  <div className="flex flex-col items-center w-full">
-                    <span className="text-[10px] uppercase font-black opacity-70 mb-1">Certificado</span>
-                    <span className="text-xs font-bold leading-tight mt-1">{calcularEstadoVencimiento(vehiculo.vencimientoCertificado).texto}</span>
-                  </div>
-                  {vehiculo.urlCertificado && (
-                    <button 
-                      type="button"
-                      onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${id}.pdf`)} 
-                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow-md transition-all active:transform active:scale-95"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                      Descargar
-                    </button>
-                  )}
-                </div>
+                {renderDocInfo('Rev. Técnica', vehiculo.vencimientoRevision, vehiculo.urlRevision, `Revision_${id}.pdf`)}
+                {renderDocInfo('Permiso Circ.', vehiculo.vencimientoCirculacion, vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)}
+                {renderDocInfo('Certificado', vehiculo.vencimientoCertificado, vehiculo.urlCertificado, `Certificado_${id}.pdf`)}
               </div>
             ) : (
               <p className="text-center text-xs text-slate-500">Documentos no disponibles.</p>
@@ -377,7 +353,7 @@ export default function VistaConductor() {
               <label className="block text-sm font-medium text-slate-600 mb-1">
                 Escribir Kilometraje
                 {kilometrajeAnterior > 0 && (
-                  <span className="text-blue-600 font-bold ml-2">(Anterior exacto: {kilometrajeAnterior} km)</span>
+                  <span className="text-blue-600 font-bold ml-2">(Anterior: {kilometrajeAnterior.toLocaleString('es-CL')} km)</span>
                 )}
               </label>
               <input 
