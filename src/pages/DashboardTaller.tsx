@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, getDocs, doc, updateDoc, addDoc, serverTimestamp, where, limit } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, updateDoc, addDoc, serverTimestamp, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 
@@ -45,6 +45,7 @@ export default function DashboardTaller() {
 
   const cargarCitas = async () => {
     try {
+      // Las citas si se pueden ordenar por fecha de creacion porque Firebase lo permite con campos simples
       const q = query(collection(db, 'citas_taller'), orderBy('fecha', 'desc'));
       const querySnapshot = await getDocs(q);
       setCitas(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -82,10 +83,17 @@ export default function DashboardTaller() {
         setOtExistente(snapOT.docs[0].data());
       }
 
-      const qReporte = query(collection(db, 'reportes'), where('vehiculoId', '==', cita.patente), orderBy('fecha', 'desc'), limit(1));
+      // CORRECCIÓN: Buscamos sin orderBy para que Firebase no falle y luego lo ordenamos aquí
+      const qReporte = query(collection(db, 'reportes'), where('vehiculoId', '==', cita.patente));
       const snapReporte = await getDocs(qReporte);
       if (!snapReporte.empty) {
-        setChecklist(snapReporte.docs[0].data());
+        const reportes = snapReporte.docs.map(d => d.data());
+        reportes.sort((a, b) => {
+          const timeA = a.fecha?.toMillis ? a.fecha.toMillis() : 0;
+          const timeB = b.fecha?.toMillis ? b.fecha.toMillis() : 0;
+          return timeB - timeA;
+        });
+        setChecklist(reportes[0]);
       }
     } catch (error) {
       console.error(error);

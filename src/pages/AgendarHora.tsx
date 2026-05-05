@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { collection, addDoc, query, where, getDocs, serverTimestamp, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 const HORAS_DISPONIBLES = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
@@ -20,21 +20,25 @@ export default function AgendarHora() {
 
   const hoy = new Date().toISOString().split('T')[0];
 
-  // 1. Analizar el último reporte para detectar el tipo de falla
+  // 1. Analizar el último reporte para detectar el tipo de falla (Corregido sin orderBy de Firebase)
   useEffect(() => {
     const analizarUltimoReporte = async () => {
       if (!id) return;
       try {
-        const q = query(
-          collection(db, 'reportes'),
-          where('vehiculoId', '==', id.toUpperCase()),
-          orderBy('fecha', 'desc'),
-          limit(1)
-        );
+        const q = query(collection(db, 'reportes'), where('vehiculoId', '==', id.toUpperCase()));
         const snapshot = await getDocs(q);
         
         if (!snapshot.empty) {
-          const reporte = snapshot.docs[0].data();
+          // Ordenamos usando JavaScript para evitar el error de Indice de Firebase
+          const reportes = snapshot.docs.map(doc => doc.data());
+          reportes.sort((a, b) => {
+            const timeA = a.fecha?.toMillis ? a.fecha.toMillis() : 0;
+            const timeB = b.fecha?.toMillis ? b.fecha.toMillis() : 0;
+            return timeB - timeA; // Mayor a menor (mas reciente primero)
+          });
+          
+          const reporte = reportes[0];
+          
           if (reporte.fallaCritica && reporte.respuestas) {
             const resp = reporte.respuestas;
             
@@ -42,7 +46,7 @@ export default function AgendarHora() {
             if (resp['luces_frontales'] === 'no' || resp['luces_traseras'] === 'no' || resp['luces_remolque'] === 'no' || resp['luces_altas_bajas'] === 'no' || resp['luces_freno_interm'] === 'no') {
               setCategoriaTaller('electrico automotriz');
               setFallaEspecifica('Falla eléctrica (Luces)');
-            } else if (resp['frenos_servicio'] === 'no' || resp['frenos_camioneta'] === 'no') {
+            } else if (resp['frenos_servicio'] === 'no' || resp['frenos_camioneta'] === 'no' || resp['freno_estacionamiento'] === 'no') {
               setCategoriaTaller('especialista en frenos');
               setFallaEspecifica('Falla en sistema de frenos');
             } else if (resp['neumaticos_tracto'] === 'no' || resp['neumaticos_remolque'] === 'no' || resp['neumaticos_camioneta'] === 'no') {
@@ -122,7 +126,6 @@ export default function AgendarHora() {
           <p className="text-blue-600 font-mono text-xl mt-2 tracking-widest bg-blue-50 inline-block px-4 py-1 rounded-xl">{id}</p>
         </div>
 
-        {/* AGENDA DE TALLER EXTERNO ASOCIADO (PARA EL 80/20) */}
         <div className="mb-8">
           <label className="block text-sm font-bold text-slate-600 mb-2 uppercase tracking-wide">
             1. Agendar Taller Asociado
@@ -132,8 +135,8 @@ export default function AgendarHora() {
           </p>
 
           {fallaEspecifica && (
-            <div className="mb-4 bg-orange-50 p-3 rounded-xl border border-orange-100">
-              <span className="text-xs font-bold text-orange-800">Falla detectada: </span>
+            <div className="mb-4 bg-orange-50 p-3 rounded-xl border border-orange-100 animate-fade-in">
+              <span className="text-xs font-bold text-orange-800">Problema Derivado: </span>
               <span className="text-sm font-black text-orange-600">{fallaEspecifica}</span>
             </div>
           )}
@@ -190,7 +193,6 @@ export default function AgendarHora() {
           </button>
         </div>
 
-        {/* BÚSQUEDA DE EMERGENCIA EN MAPS (FUERA DEL 80/20) */}
         <div className="pt-6 border-t border-slate-100">
           <label className="block text-sm font-bold text-slate-600 mb-2 uppercase tracking-wide">
             2. Urgencia en Ruta (Sin reserva)
