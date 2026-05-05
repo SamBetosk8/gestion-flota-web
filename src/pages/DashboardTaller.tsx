@@ -51,9 +51,11 @@ export default function DashboardTaller() {
       const q = query(collection(db, 'citas_taller'), where('tallerId', '==', user.uid));
       const querySnapshot = await getDocs(q);
       
-      const citasData = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Especificamos : any[] para evitar el error de TypeScript en Vercel
+      const citasData: any[] = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       
-      citasData.sort((a, b) => {
+      // Especificamos los tipos de a y b como any
+      citasData.sort((a: any, b: any) => {
          return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
       });
       
@@ -95,8 +97,9 @@ export default function DashboardTaller() {
       const qReporte = query(collection(db, 'reportes'), where('vehiculoId', '==', cita.patente));
       const snapReporte = await getDocs(qReporte);
       if (!snapReporte.empty) {
-        const reportes = snapReporte.docs.map(d => d.data());
-        reportes.sort((a, b) => {
+        // También aseguramos este sort para que Vercel no de problemas
+        const reportes: any[] = snapReporte.docs.map(d => d.data());
+        reportes.sort((a: any, b: any) => {
           const timeA = a.fecha?.toMillis ? a.fecha.toMillis() : 0;
           const timeB = b.fecha?.toMillis ? b.fecha.toMillis() : 0;
           return timeB - timeA;
