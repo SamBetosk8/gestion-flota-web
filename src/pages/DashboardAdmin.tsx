@@ -26,6 +26,7 @@ export default function DashboardAdmin() {
   const [citas, setCitas] = useState<any[]>([]);
   const [cargandoReportes, setCargandoReportes] = useState(true);
   const [reporteSeleccionado, setReporteSeleccionado] = useState<any | null>(null);
+  const [otSeleccionada, setOtSeleccionada] = useState<any | null>(null);
   
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [guardandoVehiculo, setGuardandoVehiculo] = useState(false);
@@ -53,7 +54,6 @@ export default function DashboardAdmin() {
 
   const [vehiculoEstadistica, setVehiculoEstadistica] = useState<string>('');
   
-  // Estado modificado para incluir el rol
   const [formUsuario, setFormUsuario] = useState({ email: '', password: '', rol: 'admin' });
   const [creandoUsuario, setCreandoUsuario] = useState(false);
 
@@ -75,7 +75,6 @@ export default function DashboardAdmin() {
       const secondaryAuth = getAuth(secondaryApp);
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, formUsuario.email, formUsuario.password);
       
-      // Guardar el rol del usuario en Firestore
       await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
         email: formUsuario.email,
         rol: formUsuario.rol,
@@ -132,6 +131,21 @@ export default function DashboardAdmin() {
     }
   };
 
+  const verOrdenTrabajo = async (idCita: string) => {
+    try {
+      const q = query(collection(db, 'ordenes_trabajo'), where('idCita', '==', idCita));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        setOtSeleccionada(snap.docs[0].data());
+      } else {
+        alert("No se encontró ninguna Orden de Trabajo asociada a esta cita.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error al obtener la Orden de Trabajo.");
+    }
+  };
+
   useEffect(() => {
     setLimiteReportes(10);
     setLimiteVehiculos(10);
@@ -160,7 +174,6 @@ export default function DashboardAdmin() {
                     await deleteObject(fotoRef).catch(e => console.log("Foto ya no existe", e));
                   }
                   await deleteDoc(doc(db, 'reportes', rep.id));
-                  console.log(`Reporte eliminado por antiguedad (+15 dias): ${rep.id}`);
                 } catch (e) {
                   console.error("Error al borrar reporte antiguo:", e);
                 }
@@ -979,7 +992,6 @@ export default function DashboardAdmin() {
                         </div>
                       </div>
 
-                      {/* CAMBIO CLAVE PARA ELIMINAR EL FANTASMA: Position absolute y opacity 0 */}
                       <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
                         <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
@@ -1018,8 +1030,8 @@ export default function DashboardAdmin() {
         {pestanaActiva === 'agenda' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-slate-800">Citas Agendadas</h2>
-              <p className="text-sm text-slate-500 mt-1">Administra las horas que los conductores han reservado.</p>
+              <h2 className="text-xl font-bold text-slate-800">Citas Agendadas y OTs</h2>
+              <p className="text-sm text-slate-500 mt-1">Administra las horas reservadas y revisa las Órdenes de Trabajo.</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -1053,6 +1065,9 @@ export default function DashboardAdmin() {
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex justify-center gap-2">
+                            {cita.estado === 'completada' && (
+                              <button onClick={() => verOrdenTrabajo(cita.id)} className="text-xs font-bold px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 border border-indigo-200">Ver OT</button>
+                            )}
                             {cita.estado === 'pendiente' && (
                               <>
                                 <button onClick={() => actualizarEstadoCita(cita.id, 'completada')} className="text-xs font-bold px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 border border-green-200">Completar</button>
@@ -1067,6 +1082,92 @@ export default function DashboardAdmin() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* VENTANA MODAL PARA VER ORDEN DE TRABAJO COMO ADMIN */}
+        {otSeleccionada && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto custom-scrollbar">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+                <h3 className="text-2xl font-black text-slate-800">Orden de Trabajo Guardada</h3>
+                <span className="bg-slate-800 text-white text-xs font-bold px-3 py-1 rounded-full">SOLO LECTURA</span>
+              </div>
+              <p className="text-sm text-slate-500 mb-6">Vehiculo: <span className="font-black text-blue-600 text-lg">{otSeleccionada.patente}</span></p>
+
+              {otSeleccionada.tipoVehiculo === 'Camioneta' ? (
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <p className="text-sm font-bold text-slate-700">Tipo: <span className="font-normal">{otSeleccionada.datos.tipoMantenimiento}</span></p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {['cambioAceiteGeneral', 'cambioAceiteMotor', 'cambioAceiteTransmision', 'cambioFiltro', 'suspension', 'frenos', 'embrague', 'cajaCambios'].map((item) => {
+                      if (!otSeleccionada.datos[item]) return null;
+                      return (
+                        <div key={item} className="text-xs bg-blue-50 text-blue-700 font-bold p-2 rounded-lg border border-blue-100 flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                          {item.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">Descripción</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{otSeleccionada.datos.descripcionTrabajo || 'Sin descripción'}</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">Observaciones</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{otSeleccionada.datos.observaciones || 'Sin observaciones'}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <p className="text-sm font-bold text-slate-700">Taller/Técnico: <span className="font-normal">{otSeleccionada.datos.empresaTecnico}</span></p>
+                    <p className="text-sm font-bold text-slate-700">Horas Parada: <span className="font-normal">{otSeleccionada.datos.horasParada}</span></p>
+                  </div>
+                  
+                  {otSeleccionada.datos.tareas && otSeleccionada.datos.tareas.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Tareas Realizadas</h4>
+                      <table className="w-full text-left border-collapse text-xs border border-slate-200">
+                        <thead className="bg-slate-100 text-slate-600">
+                          <tr><th className="p-2 border border-slate-200">Descripción</th><th className="p-2 border border-slate-200 text-center">Horas</th><th className="p-2 border border-slate-200 text-center">Inicio</th><th className="p-2 border border-slate-200 text-center">Fin</th></tr>
+                        </thead>
+                        <tbody>
+                          {otSeleccionada.datos.tareas.map((t: any, i: number) => (
+                            <tr key={i}><td className="p-2 border border-slate-200">{t.descripcion}</td><td className="p-2 border border-slate-200 text-center">{t.horas}</td><td className="p-2 border border-slate-200 text-center">{t.fInicio}</td><td className="p-2 border border-slate-200 text-center">{t.fFin}</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {otSeleccionada.datos.repuestos && otSeleccionada.datos.repuestos.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Repuestos</h4>
+                      <table className="w-full text-left border-collapse text-xs border border-slate-200">
+                        <thead className="bg-slate-100 text-slate-600">
+                          <tr><th className="p-2 border border-slate-200 text-center">Cant.</th><th className="p-2 border border-slate-200 text-center">Unidad</th><th className="p-2 border border-slate-200">Descripción</th></tr>
+                        </thead>
+                        <tbody>
+                          {otSeleccionada.datos.repuestos.map((r: any, i: number) => (
+                            <tr key={i}><td className="p-2 border border-slate-200 text-center">{r.cant}</td><td className="p-2 border border-slate-200 text-center">{r.unidad}</td><td className="p-2 border border-slate-200">{r.descripcion}</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">Observaciones</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{otSeleccionada.datos.observaciones || 'Sin observaciones'}</p>
+                  </div>
+                </div>
+              )}
+
+              <button onClick={() => setOtSeleccionada(null)} className="mt-8 w-full bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition-colors shadow-lg">Cerrar</button>
             </div>
           </div>
         )}

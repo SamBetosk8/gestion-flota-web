@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 
@@ -51,7 +51,10 @@ export default function VistaConductor() {
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
   const [mostrarResumen, setMostrarResumen] = useState(false);
+  
   const [kilometrajeActual, setKilometrajeActual] = useState<number | null>(null);
+  const [kilometrajeAnterior, setKilometrajeAnterior] = useState<number>(0);
+  const [kilometraje, setKilometraje] = useState('');
   
   const [fotoFile, setFotoFile] = useState<File | null>(null);
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
@@ -62,16 +65,40 @@ export default function VistaConductor() {
   const [cargandoVehiculo, setCargandoVehiculo] = useState(true);
 
   useEffect(() => {
-    const cargarVehiculo = async () => {
+    const cargarVehiculoYUltimoReporte = async () => {
       if (!id) return;
       try {
         const patenteFiltro = id.toUpperCase();
-        const q = query(collection(db, 'vehiculos'), where('patente', '==', patenteFiltro));
-        const querySnapshot = await getDocs(q);
         
-        if (!querySnapshot.empty) {
-          setVehiculo(querySnapshot.docs[0].data());
-          setVehiculoIdDoc(querySnapshot.docs[0].id);
+        // 1. Obtener datos del vehiculo
+        const qVehiculo = query(collection(db, 'vehiculos'), where('patente', '==', patenteFiltro));
+        const snapVehiculo = await getDocs(qVehiculo);
+        
+        if (!snapVehiculo.empty) {
+          const vData = snapVehiculo.docs[0].data();
+          setVehiculo(vData);
+          setVehiculoIdDoc(snapVehiculo.docs[0].id);
+
+          // 2. Buscar EXACTAMENTE el ultimo reporte para sacar el KM real
+          const qReporte = query(
+            collection(db, 'reportes'), 
+            where('vehiculoId', '==', patenteFiltro), 
+            orderBy('fecha', 'desc'), 
+            limit(1)
+          );
+          const snapReporte = await getDocs(qReporte);
+          
+          let kmRealAnterior = 0;
+          if (!snapReporte.empty) {
+            const ultimoReporte = snapReporte.docs[0].data();
+            kmRealAnterior = Number(ultimoReporte.kilometraje) || 0;
+          } else {
+            // Si no hay reportes, usa el del vehiculo como respaldo
+            kmRealAnterior = Number(vData.kilometrajeActual) || 0;
+          }
+
+          setKilometrajeAnterior(kmRealAnterior);
+          setKilometraje(kmRealAnterior > 0 ? kmRealAnterior.toString() : '');
         }
       } catch (error) {
         console.error(error);
@@ -79,7 +106,7 @@ export default function VistaConductor() {
         setCargandoVehiculo(false);
       }
     };
-    cargarVehiculo();
+    cargarVehiculoYUltimoReporte();
   }, [id]);
 
   useEffect(() => {
@@ -141,13 +168,11 @@ export default function VistaConductor() {
       return;
     }
 
-    // Validacion para que el kilometraje nuevo no sea menor que el anterior
     if (kilometrajeEscrito) {
       const kmNuevo = Number(kilometrajeEscrito);
-      const kmAnterior = Number(vehiculo?.kilometrajeActual) || 0;
       
-      if (kmNuevo < kmAnterior) {
-        alert(`Error: El kilometraje ingresado (${kmNuevo} km) no puede ser menor al ultimo registrado (${kmAnterior} km). Por favor, verifica el dato.`);
+      if (kmNuevo < kilometrajeAnterior) {
+        alert(`Error: El kilometraje ingresado (${kmNuevo} km) no puede ser menor al ultimo registro exacto (${kilometrajeAnterior} km). Por favor, verifica el dato.`);
         return;
       }
       setKilometrajeActual(kmNuevo);
@@ -175,7 +200,7 @@ export default function VistaConductor() {
       }
 
       await addDoc(collection(db, 'reportes'), {
-        vehiculoId: id,
+        vehiculoId: id?.toUpperCase(),
         tipoVehiculo: tipoActual,
         kilometraje: kilometrajeEscrito || "No ingresado",
         fotoUrl: fotoUrl,
@@ -368,23 +393,23 @@ export default function VistaConductor() {
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">
                 Escribir Kilometraje
-                {vehiculo?.kilometrajeActual && (
-                  <span className="text-blue-600 font-bold ml-2">(Anterior: {vehiculo.kilometrajeActual} km)</span>
+                {kilometrajeAnterior > 0 && (
+                  <span className="text-blue-600 font-bold ml-2">(Anterior exacto: {kilometrajeAnterior} km)</span>
                 )}
               </label>
               <input 
                 type="number" 
                 name="kilometraje" 
-                min={vehiculo?.kilometrajeActual || 0}
-                placeholder={vehiculo?.kilometrajeActual ? `Mayor a ${vehiculo.kilometrajeActual}` : "Ej: 150000"} 
-                className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                value={kilometraje}
+                onChange={(e) => setKilometraje(e.target.value)}
+                min={kilometrajeAnterior || 0}
+                className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold text-slate-700" 
               />
             </div>
             <div className="text-center text-slate-400 text-sm font-bold">O</div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">Foto del Tablero</label>
               <label className="block w-full cursor-pointer">
-                {/* CAMBIO CLAVE: Se agrego capture="environment" para forzar la camara trasera */}
                 <input type="file" accept="image/*" capture="environment" onChange={capturarFoto} className="hidden" />
                 <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-4 text-center hover:bg-slate-100 transition-all">
                   {fotoPreview ? <img src={fotoPreview} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm font-bold text-blue-600">Tomar foto con la cámara</span>}
