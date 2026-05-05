@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 
@@ -65,12 +65,10 @@ export default function VistaConductor() {
   const [cargandoVehiculo, setCargandoVehiculo] = useState(true);
 
   useEffect(() => {
-    const cargarVehiculoYUltimoReporte = async () => {
+    const cargarVehiculo = async () => {
       if (!id) return;
       try {
         const patenteFiltro = id.toUpperCase();
-        
-        // 1. Obtener datos del vehiculo
         const qVehiculo = query(collection(db, 'vehiculos'), where('patente', '==', patenteFiltro));
         const snapVehiculo = await getDocs(qVehiculo);
         
@@ -79,24 +77,8 @@ export default function VistaConductor() {
           setVehiculo(vData);
           setVehiculoIdDoc(snapVehiculo.docs[0].id);
 
-          // 2. Buscar EXACTAMENTE el ultimo reporte para sacar el KM real
-          const qReporte = query(
-            collection(db, 'reportes'), 
-            where('vehiculoId', '==', patenteFiltro), 
-            orderBy('fecha', 'desc'), 
-            limit(1)
-          );
-          const snapReporte = await getDocs(qReporte);
-          
-          let kmRealAnterior = 0;
-          if (!snapReporte.empty) {
-            const ultimoReporte = snapReporte.docs[0].data();
-            kmRealAnterior = Number(ultimoReporte.kilometraje) || 0;
-          } else {
-            // Si no hay reportes, usa el del vehiculo como respaldo
-            kmRealAnterior = Number(vData.kilometrajeActual) || 0;
-          }
-
+          // Extraemos el kilometraje actual guardado en el perfil del vehiculo
+          const kmRealAnterior = Number(vData.kilometrajeActual) || 0;
           setKilometrajeAnterior(kmRealAnterior);
           setKilometraje(kmRealAnterior > 0 ? kmRealAnterior.toString() : '');
         }
@@ -106,7 +88,7 @@ export default function VistaConductor() {
         setCargandoVehiculo(false);
       }
     };
-    cargarVehiculoYUltimoReporte();
+    cargarVehiculo();
   }, [id]);
 
   useEffect(() => {
@@ -171,9 +153,10 @@ export default function VistaConductor() {
     if (kilometrajeEscrito) {
       const kmNuevo = Number(kilometrajeEscrito);
       
+      // Validacion estricta contra el kilometraje anterior
       if (kmNuevo < kilometrajeAnterior) {
         alert(`Error: El kilometraje ingresado (${kmNuevo} km) no puede ser menor al ultimo registro exacto (${kilometrajeAnterior} km). Por favor, verifica el dato.`);
-        return;
+        return; // Detiene el envio
       }
       setKilometrajeActual(kmNuevo);
     }
@@ -402,7 +385,7 @@ export default function VistaConductor() {
                 name="kilometraje" 
                 value={kilometraje}
                 onChange={(e) => setKilometraje(e.target.value)}
-                min={kilometrajeAnterior || 0}
+                min={kilometrajeAnterior > 0 ? kilometrajeAnterior : 0}
                 className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold text-slate-700" 
               />
             </div>
