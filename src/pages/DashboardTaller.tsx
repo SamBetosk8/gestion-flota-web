@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, doc, updateDoc, addDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, doc, updateDoc, addDoc, serverTimestamp, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 
@@ -13,6 +13,9 @@ export default function DashboardTaller() {
   const [guardando, setGuardando] = useState(false);
   const [vehiculoData, setVehiculoData] = useState<any>(null);
   const [proxMantenimiento, setProxMantenimiento] = useState<string>('');
+  
+  // NUEVO: Para guardar el perfil del taller logueado
+  const [perfilTaller, setPerfilTaller] = useState<any>(null);
 
   const [formCamioneta, setFormCamioneta] = useState({
     tipoMantenimiento: 'Preventivo',
@@ -43,18 +46,22 @@ export default function DashboardTaller() {
     navigate('/login');
   };
 
-  const cargarCitas = async () => {
+  const cargarCitasYPerfil = async () => {
     try {
       const user = auth.currentUser;
       if (!user) return;
       
+      // Obtener el perfil del taller
+      const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+      if (userDoc.exists()) {
+        setPerfilTaller(userDoc.data());
+      }
+      
+      // Obtener las citas
       const q = query(collection(db, 'citas_taller'), where('tallerId', '==', user.uid));
       const querySnapshot = await getDocs(q);
       
-      // Especificamos : any[] para evitar el error de TypeScript en Vercel
       const citasData: any[] = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      // Especificamos los tipos de a y b como any
       citasData.sort((a: any, b: any) => {
          return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
       });
@@ -66,7 +73,7 @@ export default function DashboardTaller() {
   };
 
   useEffect(() => {
-    cargarCitas();
+    cargarCitasYPerfil();
   }, []);
 
   const seleccionarCita = async (cita: any) => {
@@ -97,7 +104,6 @@ export default function DashboardTaller() {
       const qReporte = query(collection(db, 'reportes'), where('vehiculoId', '==', cita.patente));
       const snapReporte = await getDocs(qReporte);
       if (!snapReporte.empty) {
-        // También aseguramos este sort para que Vercel no de problemas
         const reportes: any[] = snapReporte.docs.map(d => d.data());
         reportes.sort((a: any, b: any) => {
           const timeA = a.fecha?.toMillis ? a.fecha.toMillis() : 0;
@@ -130,7 +136,7 @@ export default function DashboardTaller() {
         tipoVehiculo: vehiculoData.tipo,
         datos: datosOT,
         fechaCreacion: serverTimestamp(),
-        creadoPor: 'Taller Asociado'
+        creadoPor: perfilTaller ? perfilTaller.nombreTaller : 'Taller Asociado'
       });
 
       await updateDoc(doc(db, 'citas_taller', citaSeleccionada.id), {
@@ -145,7 +151,7 @@ export default function DashboardTaller() {
 
       alert("Orden de Trabajo guardada y proximo mantenimiento actualizado.");
       seleccionarCita(citaSeleccionada);
-      cargarCitas();
+      cargarCitasYPerfil();
     } catch (error) {
       console.error(error);
       alert("Error al guardar OT");
@@ -160,7 +166,23 @@ export default function DashboardTaller() {
         <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-6">
           <div>
             <h1 className="text-3xl font-black text-slate-800">Portal Taller Asociado</h1>
-            <p className="text-slate-500">Gestión de Ordenes de Trabajo</p>
+            {perfilTaller ? (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm font-bold text-slate-600">{perfilTaller.nombreTaller}</span>
+                <span className="text-slate-300">|</span>
+                <a 
+                  href={`https://maps.google.com/maps/search/?api=1&query=${encodeURIComponent(perfilTaller.nombreTaller + ' ' + (perfilTaller.ciudadTaller ? perfilTaller.direccionTaller + ', ' + perfilTaller.ciudadTaller : perfilTaller.ubicacionTaller))}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-xs font-bold text-blue-500 hover:text-blue-700 flex items-center gap-1 hover:underline"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
+                  {perfilTaller.ciudadTaller ? `${perfilTaller.direccionTaller}, ${perfilTaller.ciudadTaller}` : perfilTaller.ubicacionTaller}
+                </a>
+              </div>
+            ) : (
+              <p className="text-slate-500">Gestión de Ordenes de Trabajo</p>
+            )}
           </div>
           <button onClick={manejarCerrarSesion} className="bg-slate-200 text-slate-700 font-bold py-2 px-6 rounded-xl hover:bg-slate-300">Salir</button>
         </div>

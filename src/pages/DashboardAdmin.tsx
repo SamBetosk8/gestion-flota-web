@@ -45,8 +45,10 @@ export default function DashboardAdmin() {
   
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
+  
+  // Modificado para separar Direccion y Ciudad
   const [formUsuario, setFormUsuario] = useState({ 
-    email: '', password: '', rol: 'admin', nombreTaller: '', ubicacionTaller: '', especialidadTaller: 'Mecánica Integrada' 
+    email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada' 
   });
   const [creandoUsuario, setCreandoUsuario] = useState(false);
 
@@ -67,7 +69,7 @@ export default function DashboardAdmin() {
   };
 
   const limpiarFormUsuario = () => {
-    setFormUsuario({ email: '', password: '', rol: 'admin', nombreTaller: '', ubicacionTaller: '', especialidadTaller: 'Mecánica Integrada' });
+    setFormUsuario({ email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada' });
     setEditandoUsuarioId(null);
   };
 
@@ -81,10 +83,11 @@ export default function DashboardAdmin() {
           rol: formUsuario.rol,
           ...(formUsuario.rol === 'taller' ? {
             nombreTaller: formUsuario.nombreTaller,
-            ubicacionTaller: formUsuario.ubicacionTaller,
+            direccionTaller: formUsuario.direccionTaller,
+            ciudadTaller: formUsuario.ciudadTaller,
             especialidadTaller: formUsuario.especialidadTaller
           } : {
-            nombreTaller: '', ubicacionTaller: '', especialidadTaller: ''
+            nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: ''
           })
         });
         alert("Usuario actualizado correctamente.");
@@ -103,7 +106,8 @@ export default function DashboardAdmin() {
           rol: formUsuario.rol,
           ...(formUsuario.rol === 'taller' && {
             nombreTaller: formUsuario.nombreTaller,
-            ubicacionTaller: formUsuario.ubicacionTaller,
+            direccionTaller: formUsuario.direccionTaller,
+            ciudadTaller: formUsuario.ciudadTaller,
             especialidadTaller: formUsuario.especialidadTaller
           }),
           fechaCreacion: serverTimestamp()
@@ -128,7 +132,8 @@ export default function DashboardAdmin() {
       password: '',
       rol: user.rol || 'admin',
       nombreTaller: user.nombreTaller || '',
-      ubicacionTaller: user.ubicacionTaller || '',
+      direccionTaller: user.direccionTaller || user.ubicacionTaller || '', // Fallback por si hay datos viejos
+      ciudadTaller: user.ciudadTaller || '',
       especialidadTaller: user.especialidadTaller || 'Mecánica Integrada'
     });
     setEditandoUsuarioId(user.id);
@@ -1113,7 +1118,21 @@ export default function DashboardAdmin() {
                           <span className="text-sm font-medium text-slate-500">{cita.hora}</span>
                         </td>
                         <td className="p-4 font-black text-blue-600 text-lg">{cita.patente}</td>
-                        <td className="p-4 text-sm font-medium text-slate-600">{cita.tipoTaller || 'Taller Externo'}</td>
+                        <td className="p-4">
+                          <div className="text-sm font-bold text-slate-700">{cita.tipoTaller || 'Taller Externo'}</div>
+                          {/* BOTON PARA UBICAR TALLER EN MAPA DESDE EL ADMIN */}
+                          {cita.tipoTaller && cita.tipoTaller !== 'Externo Asociado' && (
+                            <a 
+                              href={`https://maps.google.com/maps/search/?api=1&query=${encodeURIComponent(cita.tipoTaller)}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-[10px] text-blue-500 font-bold hover:text-blue-700 hover:underline flex items-center gap-1 mt-1"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
+                              Ubicar en Mapa
+                            </a>
+                          )}
+                        </td>
                         <td className="p-4 text-center">
                           <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
                             cita.estado === 'pendiente' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
@@ -1291,7 +1310,7 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO USUARIOS (NUEVO DISEÑO CON TABLA) */}
+        {/* CONTENIDO USUARIOS (DISEÑO SEPARADO: DIRECCION Y CIUDAD) */}
         {pestanaActiva === 'usuarios' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
@@ -1329,8 +1348,12 @@ export default function DashboardAdmin() {
                       <input type="text" required value={formUsuario.especialidadTaller} onChange={(e) => setFormUsuario({...formUsuario, especialidadTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Mecánica Integrada, Pintura" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-blue-800 mb-1">Ubicacion / Direccion</label>
-                      <input type="text" required value={formUsuario.ubicacionTaller} onChange={(e) => setFormUsuario({...formUsuario, ubicacionTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Vicuña Mackenna 2945, Calama" />
+                      <label className="block text-sm font-medium text-blue-800 mb-1">Dirección Exacta</label>
+                      <input type="text" required value={formUsuario.direccionTaller} onChange={(e) => setFormUsuario({...formUsuario, direccionTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Vicuña Mackenna 2945" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">Ciudad</label>
+                      <input type="text" required value={formUsuario.ciudadTaller} onChange={(e) => setFormUsuario({...formUsuario, ciudadTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Calama" />
                     </div>
                   </div>
                 )}
@@ -1372,7 +1395,7 @@ export default function DashboardAdmin() {
                             <div className="text-sm">
                               <p className="font-black text-blue-700">{user.nombreTaller || 'Sin nombre'}</p>
                               <p className="text-slate-500 font-medium text-xs">{user.especialidadTaller}</p>
-                              <p className="text-slate-500 text-xs">{user.ubicacionTaller}</p>
+                              <p className="text-slate-500 text-xs">{user.ciudadTaller ? `${user.direccionTaller}, ${user.ciudadTaller}` : user.ubicacionTaller}</p>
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400 italic">Acceso Total</span>

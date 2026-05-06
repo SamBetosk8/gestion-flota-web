@@ -14,7 +14,6 @@ export default function AgendarHora() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Estados para la seleccion de taller
   const [talleres, setTalleres] = useState<any[]>([]);
   const [tallerSeleccionado, setTallerSeleccionado] = useState('');
   
@@ -114,7 +113,7 @@ export default function AgendarHora() {
     if (!confirmar) return;
 
     const tallerDestino = talleres.find(t => t.id === tallerSeleccionado);
-    const nombreTallerDestino = tallerDestino ? `${tallerDestino.nombreTaller} - ${tallerDestino.ubicacionTaller}` : 'Externo Asociado';
+    const nombreTallerDestino = tallerDestino ? `${tallerDestino.nombreTaller} - ${tallerDestino.ciudadTaller ? tallerDestino.direccionTaller + ', ' + tallerDestino.ciudadTaller : tallerDestino.ubicacionTaller}` : 'Externo Asociado';
 
     setGuardando(true);
     try {
@@ -141,6 +140,9 @@ export default function AgendarHora() {
   };
 
   const tallerActual = talleres.find(t => t.id === tallerSeleccionado);
+  
+  // Constante para unificar la forma en que armamos la direccion
+  const direccionCompleta = tallerActual ? (tallerActual.ciudadTaller ? `${tallerActual.direccionTaller}, ${tallerActual.ciudadTaller}` : tallerActual.ubicacionTaller || tallerActual.direccionTaller) : '';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center p-6">
@@ -198,7 +200,7 @@ export default function AgendarHora() {
                   height="100%" 
                   frameBorder="0" 
                   style={{ border: 0 }} 
-                  src={`https://maps.google.com/maps?q=${encodeURIComponent(tallerActual.nombreTaller + ' ' + tallerActual.ubicacionTaller)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} 
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(tallerActual.nombreTaller + ' ' + direccionCompleta)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} 
                   allowFullScreen
                   title="Ubicación del Taller"
                 ></iframe>
@@ -208,7 +210,7 @@ export default function AgendarHora() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                 </svg>
-                <span className="leading-tight">{tallerActual.ubicacionTaller}</span>
+                <span className="leading-tight">{direccionCompleta}</span>
               </div>
             </div>
           )}
@@ -284,7 +286,7 @@ export default function AgendarHora() {
           </a>
         </div>
 
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center border-t border-slate-100 pt-6">
           <Link to={`/v/${id}`} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors py-2">
             Cancelar y volver al resumen
           </Link>
