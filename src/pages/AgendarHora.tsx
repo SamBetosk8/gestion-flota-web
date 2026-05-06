@@ -141,7 +141,6 @@ export default function AgendarHora() {
 
   const tallerActual = talleres.find(t => t.id === tallerSeleccionado);
   
-  // Constante para unificar la forma en que armamos la direccion
   const direccionCompleta = tallerActual ? (tallerActual.ciudadTaller ? `${tallerActual.direccionTaller}, ${tallerActual.ciudadTaller}` : tallerActual.ubicacionTaller || tallerActual.direccionTaller) : '';
 
   return (
@@ -184,7 +183,6 @@ export default function AgendarHora() {
             </div>
           )}
 
-          {/* TARJETA DE TALLER CON MAPA INCRUSTADO */}
           {tallerActual && (
             <div className="mb-6 bg-white p-4 rounded-2xl border-2 border-blue-100 shadow-sm flex flex-col animate-fade-in">
               <div className="mb-3">
@@ -200,7 +198,7 @@ export default function AgendarHora() {
                   height="100%" 
                   frameBorder="0" 
                   style={{ border: 0 }} 
-                  src={`https://maps.google.com/maps?q=${encodeURIComponent(tallerActual.nombreTaller + ' ' + direccionCompleta)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} 
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(direccionCompleta)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} 
                   allowFullScreen
                   title="Ubicación del Taller"
                 ></iframe>
