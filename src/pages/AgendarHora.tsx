@@ -18,8 +18,8 @@ export default function AgendarHora() {
   const [talleres, setTalleres] = useState<any[]>([]);
   const [tallerSeleccionado, setTallerSeleccionado] = useState('');
   
-  const [categoriaTaller, setCategoriaTaller] = useState('mecanico');
   const [fallaEspecifica, setFallaEspecifica] = useState<string | null>(null);
+  const [categoriaTaller, setCategoriaTaller] = useState('mecanico');
 
   const hoy = new Date().toISOString().split('T')[0];
 
@@ -140,6 +140,8 @@ export default function AgendarHora() {
     }
   };
 
+  const tallerActual = talleres.find(t => t.id === tallerSeleccionado);
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center p-6">
       <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-100">
@@ -171,12 +173,43 @@ export default function AgendarHora() {
               className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all mb-4"
             >
               {talleres.map(t => (
-                <option key={t.id} value={t.id}>{t.nombreTaller} ({t.ubicacionTaller})</option>
+                <option key={t.id} value={t.id}>{t.nombreTaller}</option>
               ))}
             </select>
           ) : (
             <div className="p-4 bg-yellow-50 text-yellow-700 rounded-2xl mb-4 text-sm font-bold border border-yellow-200">
               No hay talleres asociados registrados en el sistema. Contacta a administración.
+            </div>
+          )}
+
+          {/* TARJETA DE TALLER CON MAPA INCRUSTADO */}
+          {tallerActual && (
+            <div className="mb-6 bg-white p-4 rounded-2xl border-2 border-blue-100 shadow-sm flex flex-col animate-fade-in">
+              <div className="mb-3">
+                <h4 className="font-black text-lg text-slate-800">{tallerActual.nombreTaller}</h4>
+                <span className="inline-block bg-blue-100 text-blue-700 text-[10px] font-black uppercase px-2 py-1 rounded-md mt-1">
+                  {tallerActual.especialidadTaller || 'Mecánica General'}
+                </span>
+              </div>
+              
+              <div className="w-full h-48 rounded-xl overflow-hidden border border-slate-200 mb-3 bg-slate-100">
+                <iframe 
+                  width="100%" 
+                  height="100%" 
+                  frameBorder="0" 
+                  style={{ border: 0 }} 
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(tallerActual.nombreTaller + ' ' + tallerActual.ubicacionTaller)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} 
+                  allowFullScreen
+                  title="Ubicación del Taller"
+                ></iframe>
+              </div>
+
+              <div className="flex items-center gap-2 text-sm font-bold text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                </svg>
+                <span className="leading-tight">{tallerActual.ubicacionTaller}</span>
+              </div>
             </div>
           )}
 
@@ -253,7 +286,7 @@ export default function AgendarHora() {
 
         <div className="mt-6 text-center">
           <Link to={`/v/${id}`} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors py-2">
-            Cancelar y volver
+            Cancelar y volver al resumen
           </Link>
         </div>
 

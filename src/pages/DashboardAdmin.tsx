@@ -33,29 +33,22 @@ export default function DashboardAdmin() {
   const [sincronizando, setSincronizando] = useState(false);
   
   const [formVehiculo, setFormVehiculo] = useState({
-    patente: '',
-    tipo: 'Camioneta',
-    vencimientoRevision: '',
-    vencimientoCirculacion: '',
-    vencimientoCertificado: '',
-    kilometrajeActual: '',
-    kilometrajeTaller: '',
-    urlRevision: '',
-    urlCirculacion: '',
-    urlCertificado: ''
+    patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: ''
   });
 
   const [pdfRevision, setPdfRevision] = useState<File | null>(null);
   const [pdfCirculacion, setPdfCirculacion] = useState<File | null>(null);
   const [pdfCertificado, setPdfCertificado] = useState<File | null>(null);
-
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
-
   const [vehiculoEstadistica, setVehiculoEstadistica] = useState<string>('');
   
-  // Estado modificado para incluir nombre y ubicacion del taller
-  const [formUsuario, setFormUsuario] = useState({ email: '', password: '', rol: 'admin', nombreTaller: '', ubicacionTaller: '' });
+  // NUEVO: Estados para la gestión de usuarios
+  const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
+  const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
+  const [formUsuario, setFormUsuario] = useState({ 
+    email: '', password: '', rol: 'admin', nombreTaller: '', ubicacionTaller: '', especialidadTaller: 'Mecánica Integrada' 
+  });
   const [creandoUsuario, setCreandoUsuario] = useState(false);
 
   const manejarCerrarSesion = async () => {
@@ -63,37 +56,96 @@ export default function DashboardAdmin() {
     navigate('/login');
   };
 
-  const crearNuevoUsuario = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (formUsuario.password.length < 6) {
-      alert("La contrasena debe tener al menos 6 caracteres.");
-      return;
+  const cargarUsuarios = async () => {
+    try {
+      const q = query(collection(db, 'usuarios'));
+      const snap = await getDocs(q);
+      const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUsuariosRegistrados(users);
+    } catch (error) {
+      console.error("Error al cargar usuarios:", error);
     }
+  };
+
+  const limpiarFormUsuario = () => {
+    setFormUsuario({ email: '', password: '', rol: 'admin', nombreTaller: '', ubicacionTaller: '', especialidadTaller: 'Mecánica Integrada' });
+    setEditandoUsuarioId(null);
+  };
+
+  const guardarUsuario = async (e: React.FormEvent) => {
+    e.preventDefault();
     setCreandoUsuario(true);
 
     try {
-      const secondaryApp = initializeApp(firebaseConfig, "Secondary");
-      const secondaryAuth = getAuth(secondaryApp);
-      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, formUsuario.email, formUsuario.password);
-      
-      await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
-        email: formUsuario.email,
-        rol: formUsuario.rol,
-        ...(formUsuario.rol === 'taller' && {
-          nombreTaller: formUsuario.nombreTaller,
-          ubicacionTaller: formUsuario.ubicacionTaller
-        }),
-        fechaCreacion: serverTimestamp()
-      });
+      if (editandoUsuarioId) {
+        // ACTUALIZAR USUARIO EXISTENTE
+        await updateDoc(doc(db, 'usuarios', editandoUsuarioId), {
+          rol: formUsuario.rol,
+          ...(formUsuario.rol === 'taller' ? {
+            nombreTaller: formUsuario.nombreTaller,
+            ubicacionTaller: formUsuario.ubicacionTaller,
+            especialidadTaller: formUsuario.especialidadTaller
+          } : {
+            nombreTaller: '', ubicacionTaller: '', especialidadTaller: ''
+          })
+        });
+        alert("Usuario actualizado correctamente.");
+      } else {
+        // CREAR NUEVO USUARIO
+        if (formUsuario.password.length < 6) {
+          alert("La contraseña debe tener al menos 6 caracteres.");
+          setCreandoUsuario(false);
+          return;
+        }
+        const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+        const secondaryAuth = getAuth(secondaryApp);
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, formUsuario.email, formUsuario.password);
+        
+        await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
+          email: formUsuario.email,
+          rol: formUsuario.rol,
+          ...(formUsuario.rol === 'taller' && {
+            nombreTaller: formUsuario.nombreTaller,
+            ubicacionTaller: formUsuario.ubicacionTaller,
+            especialidadTaller: formUsuario.especialidadTaller
+          }),
+          fechaCreacion: serverTimestamp()
+        });
 
-      await deleteApp(secondaryApp);
-      alert("Usuario creado exitosamente.");
-      setFormUsuario({ email: '', password: '', rol: 'admin', nombreTaller: '', ubicacionTaller: '' });
+        await deleteApp(secondaryApp);
+        alert("Usuario creado exitosamente.");
+      }
+      limpiarFormUsuario();
+      cargarUsuarios();
     } catch (error: any) {
       console.error(error);
-      alert(`Error al crear usuario.`);
+      alert(`Error al guardar el usuario.`);
     } finally {
       setCreandoUsuario(false);
+    }
+  };
+
+  const editarUsuario = (user: any) => {
+    setFormUsuario({
+      email: user.email,
+      password: '', // No se muestra ni edita por seguridad
+      rol: user.rol || 'admin',
+      nombreTaller: user.nombreTaller || '',
+      ubicacionTaller: user.ubicacionTaller || '',
+      especialidadTaller: user.especialidadTaller || 'Mecánica Integrada'
+    });
+    setEditandoUsuarioId(user.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const eliminarUsuario = async (id: string) => {
+    const confirmar = window.confirm("¿Eliminar el perfil de este usuario de la base de datos?");
+    if (!confirmar) return;
+    try {
+      await deleteDoc(doc(db, 'usuarios', id));
+      cargarUsuarios();
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -228,6 +280,10 @@ export default function DashboardAdmin() {
 
   useEffect(() => {
     if (pestanaActiva === 'agenda') cargarCitas();
+  }, [pestanaActiva]);
+
+  useEffect(() => {
+    if (pestanaActiva === 'usuarios') cargarUsuarios();
   }, [pestanaActiva]);
 
   const eliminarReporteIndividual = async (id: string, fotoPath: string | null) => {
@@ -667,6 +723,7 @@ export default function DashboardAdmin() {
 
         {/* CONTENIDO REPORTES */}
         {pestanaActiva === 'reportes' && (
+          {/* ... (Este bloque se mantiene exactamente igual) ... */}
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
               <h2 className="text-xl font-bold text-slate-800">Registros Diarios {filtroTipoVehiculo !== 'todos' && <span className="text-sm font-normal text-slate-500">({filtroTipoVehiculo}s)</span>}</h2>
@@ -1238,47 +1295,103 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO USUARIOS */}
+        {/* CONTENIDO USUARIOS (NUEVO DISEÑO CON TABLA) */}
         {pestanaActiva === 'usuarios' && (
-          <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 max-w-md mx-auto">
-            <div className="mb-6 border-b border-slate-100 pb-4 text-center">
-              <h2 className="text-xl font-bold text-slate-800">Crear Usuario</h2>
-              <p className="text-sm text-slate-500 mt-1">Registra nuevos accesos al panel.</p>
-            </div>
-            <form onSubmit={crearNuevoUsuario} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Correo Electronico</label>
-                <input type="email" required value={formUsuario.email} onChange={(e) => setFormUsuario({...formUsuario, email: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="nuevo@empresa.com" />
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
+              <div className="mb-6 border-b border-slate-100 pb-4">
+                <h2 className="text-xl font-bold text-slate-800">{editandoUsuarioId ? 'Editar Perfil' : 'Crear Usuario'}</h2>
+                <p className="text-sm text-slate-500 mt-1">Gestiona los accesos al sistema.</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Contrasena (Minimo 6 caracteres)</label>
-                <input type="password" required minLength={6} value={formUsuario.password} onChange={(e) => setFormUsuario({...formUsuario, password: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Tipo de Usuario</label>
-                <select value={formUsuario.rol} onChange={(e) => setFormUsuario({...formUsuario, rol: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                  <option value="admin">Administrador General</option>
-                  <option value="taller">Taller Externo Asociado</option>
-                </select>
-              </div>
-              
-              {formUsuario.rol === 'taller' && (
-                <div className="space-y-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
-                  <div>
-                    <label className="block text-sm font-medium text-blue-800 mb-1">Nombre del Taller</label>
-                    <input type="text" required value={formUsuario.nombreTaller} onChange={(e) => setFormUsuario({...formUsuario, nombreTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: LubriLoa" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-blue-800 mb-1">Ubicacion / Direccion</label>
-                    <input type="text" required value={formUsuario.ubicacionTaller} onChange={(e) => setFormUsuario({...formUsuario, ubicacionTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Vicuña Mackenna 2945, Calama" />
-                  </div>
+              <form onSubmit={guardarUsuario} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Correo Electronico</label>
+                  <input type="email" required disabled={!!editandoUsuarioId} value={formUsuario.email} onChange={(e) => setFormUsuario({...formUsuario, email: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500" placeholder="usuario@empresa.com" />
                 </div>
-              )}
+                {!editandoUsuarioId && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 mb-1">Contrasena (Minimo 6 caracteres)</label>
+                    <input type="password" required minLength={6} value={formUsuario.password} onChange={(e) => setFormUsuario({...formUsuario, password: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Tipo de Rol</label>
+                  <select value={formUsuario.rol} onChange={(e) => setFormUsuario({...formUsuario, rol: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="admin">Administrador General</option>
+                    <option value="taller">Taller Externo Asociado</option>
+                  </select>
+                </div>
+                
+                {formUsuario.rol === 'taller' && (
+                  <div className="space-y-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">Nombre del Taller</label>
+                      <input type="text" required value={formUsuario.nombreTaller} onChange={(e) => setFormUsuario({...formUsuario, nombreTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: LubriLoa" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">Especialidad</label>
+                      <input type="text" required value={formUsuario.especialidadTaller} onChange={(e) => setFormUsuario({...formUsuario, especialidadTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Mecánica Integrada, Pintura" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">Ubicacion / Direccion</label>
+                      <input type="text" required value={formUsuario.ubicacionTaller} onChange={(e) => setFormUsuario({...formUsuario, ubicacionTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Vicuña Mackenna 2945, Calama" />
+                    </div>
+                  </div>
+                )}
 
-              <button type="submit" disabled={creandoUsuario} className={`w-full font-bold py-4 rounded-xl mt-4 transition-all shadow-md ${creandoUsuario ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white hover:bg-slate-900'}`}>
-                {creandoUsuario ? 'Creando cuenta...' : 'Registrar Usuario'}
-              </button>
-            </form>
+                <div className="flex gap-2 mt-4">
+                  <button type="submit" disabled={creandoUsuario} className={`flex-1 font-bold py-3 rounded-xl transition-all shadow-md ${creandoUsuario ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white hover:bg-slate-900'}`}>
+                    {creandoUsuario ? 'Guardando...' : (editandoUsuarioId ? 'Guardar Cambios' : 'Crear Usuario')}
+                  </button>
+                  {editandoUsuarioId && (
+                    <button type="button" onClick={limpiarFormUsuario} className="px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 xl:col-span-2">
+              <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800">Cuentas Registradas</h2></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-white text-slate-600 text-xs uppercase tracking-wider border-b border-slate-100">
+                      <th className="p-4 font-bold">Correo (Auth)</th>
+                      <th className="p-4 font-bold">Detalle Perfil</th>
+                      <th className="p-4 font-bold text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {usuariosRegistrados.length === 0 ? (<tr><td colSpan={3} className="p-8 text-center text-slate-400">Cargando usuarios...</td></tr>) 
+                    : usuariosRegistrados.map((user) => (
+                      <tr key={user.id} className="hover:bg-slate-50">
+                        <td className="p-4">
+                          <span className="font-bold text-slate-800">{user.email}</span>
+                          <span className={`text-[10px] block mt-1 uppercase font-bold px-2 py-0.5 rounded inline-block ${user.rol === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {user.rol}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          {user.rol === 'taller' ? (
+                            <div className="text-sm">
+                              <p className="font-black text-blue-700">{user.nombreTaller || 'Sin nombre'}</p>
+                              <p className="text-slate-500 font-medium text-xs">{user.especialidadTaller}</p>
+                              <p className="text-slate-500 text-xs">{user.ubicacionTaller}</p>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">Acceso Total</span>
+                          )}
+                        </td>
+                        <td className="p-4 flex gap-2 justify-center mt-2">
+                          <button onClick={() => editarUsuario(user)} className="text-xs font-bold px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">Editar</button>
+                          <button onClick={() => eliminarUsuario(user.id)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Borrar</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
