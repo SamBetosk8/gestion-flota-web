@@ -43,7 +43,6 @@ export default function DashboardAdmin() {
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
   const [vehiculoEstadistica, setVehiculoEstadistica] = useState<string>('');
   
-  // NUEVO: Estados para la gestión de usuarios
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
   const [formUsuario, setFormUsuario] = useState({ 
@@ -78,7 +77,6 @@ export default function DashboardAdmin() {
 
     try {
       if (editandoUsuarioId) {
-        // ACTUALIZAR USUARIO EXISTENTE
         await updateDoc(doc(db, 'usuarios', editandoUsuarioId), {
           rol: formUsuario.rol,
           ...(formUsuario.rol === 'taller' ? {
@@ -91,7 +89,6 @@ export default function DashboardAdmin() {
         });
         alert("Usuario actualizado correctamente.");
       } else {
-        // CREAR NUEVO USUARIO
         if (formUsuario.password.length < 6) {
           alert("La contraseña debe tener al menos 6 caracteres.");
           setCreandoUsuario(false);
@@ -128,7 +125,7 @@ export default function DashboardAdmin() {
   const editarUsuario = (user: any) => {
     setFormUsuario({
       email: user.email,
-      password: '', // No se muestra ni edita por seguridad
+      password: '',
       rol: user.rol || 'admin',
       nombreTaller: user.nombreTaller || '',
       ubicacionTaller: user.ubicacionTaller || '',
@@ -723,7 +720,6 @@ export default function DashboardAdmin() {
 
         {/* CONTENIDO REPORTES */}
         {pestanaActiva === 'reportes' && (
-          {/* ... (Este bloque se mantiene exactamente igual) ... */}
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
               <h2 className="text-xl font-bold text-slate-800">Registros Diarios {filtroTipoVehiculo !== 'todos' && <span className="text-sm font-normal text-slate-500">({filtroTipoVehiculo}s)</span>}</h2>
