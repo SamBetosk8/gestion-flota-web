@@ -142,7 +142,6 @@ export default function AgendarHora() {
 
   const tallerActual = talleres.find(t => t.id === tallerSeleccionado);
   
-  // Usamos SOLAMENTE la dirección y la ciudad para no confundir a Google Maps con nombres de locales que no existen en su base
   const direccionParaMapa = tallerActual ? (tallerActual.ciudadTaller ? `${tallerActual.direccionTaller}, ${tallerActual.ciudadTaller}` : tallerActual.ubicacionTaller || tallerActual.direccionTaller) : '';
 
   return (
@@ -185,7 +184,6 @@ export default function AgendarHora() {
             </div>
           )}
 
-          {/* TARJETA DE TALLER CON MAPA INCRUSTADO */}
           {tallerActual && (
             <div className="mb-6 bg-white p-4 rounded-2xl border-2 border-blue-100 shadow-sm flex flex-col animate-fade-in">
               <div className="mb-3">
@@ -277,7 +275,7 @@ export default function AgendarHora() {
             Usa esta opción solo si necesitas un taller por emergencia y no puedes esperar la coordinación.
           </p>
           <a 
-            href={`https://www.google.com/maps/search/taller+${categoriaTaller}+cerca+de+mi`} 
+            href={`https://www.google.com/maps/search/?api=1&query=${categoriaTaller}+cerca+de+mi`} 
             target="_blank" 
             rel="noopener noreferrer"
             className="w-full flex items-center justify-center gap-2 bg-white border-2 border-indigo-200 hover:bg-indigo-50 text-indigo-600 font-bold py-3 px-4 rounded-xl transition-colors text-sm shadow-sm"

@@ -40,7 +40,6 @@ export default function DashboardTaller() {
     observaciones: ''
   });
 
-  // NUEVO: Función para registrar acciones
   const logAccion = async (accion: string, detalles: string) => {
     try {
       const user = auth.currentUser;
@@ -188,7 +187,7 @@ export default function DashboardTaller() {
                 <span className="text-sm font-bold text-slate-600">{perfilTaller.nombreTaller}</span>
                 <span className="text-slate-300">|</span>
                 <a 
-                  href={`https://www.google.com/maps/search/taller+${encodeURIComponent(perfilTaller.ciudadTaller ? perfilTaller.direccionTaller + ', ' + perfilTaller.ciudadTaller : perfilTaller.ubicacionTaller)}`} 
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(perfilTaller.ciudadTaller ? perfilTaller.direccionTaller + ', ' + perfilTaller.ciudadTaller : perfilTaller.ubicacionTaller)}`} 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="text-xs font-bold text-blue-500 hover:text-blue-700 flex items-center gap-1 hover:underline"

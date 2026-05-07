@@ -50,10 +50,8 @@ export default function DashboardAdmin() {
   });
   const [creandoUsuario, setCreandoUsuario] = useState(false);
 
-  // NUEVO: Estado para el historial de auditoria
   const [historialAcciones, setHistorialAcciones] = useState<any[]>([]);
 
-  // NUEVO: Función para registrar cualquier cambio en el sistema
   const logAccion = async (accion: string, detalles: string) => {
     try {
       const user = auth.currentUser;
@@ -156,7 +154,6 @@ export default function DashboardAdmin() {
   };
 
   const editarUsuario = (user: any) => {
-    // CORRECCIÓN: Nos aseguramos de leer exactamente el rol que tiene para que no se resetee a admin por accidente
     const rolActual = user.rol === 'taller' ? 'taller' : 'admin';
     setFormUsuario({
       email: user.email,
@@ -1166,10 +1163,9 @@ export default function DashboardAdmin() {
                         <td className="p-4 font-black text-blue-600 text-lg">{cita.patente}</td>
                         <td className="p-4">
                           <div className="text-sm font-bold text-slate-700">{cita.nombreTallerDestino || cita.tipoTaller || 'Taller Externo'}</div>
-                          {/* BOTON PARA UBICAR TALLER EN MAPA DESDE EL ADMIN */}
                           {cita.direccionCompletaTaller && (
                             <a 
-                              href={`https://www.google.com/maps/search/taller+${encodeURIComponent(cita.direccionCompletaTaller)}`} 
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cita.direccionCompletaTaller)}`} 
                               target="_blank" 
                               rel="noopener noreferrer" 
                               className="text-[10px] text-blue-500 font-bold hover:text-blue-700 hover:underline flex items-center gap-1 mt-1"
@@ -1297,7 +1293,66 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO USUARIOS (DISEÑO SEPARADO: DIRECCION Y CIUDAD) */}
+        {/* CONTENIDO ESTADISTICAS */}
+        {pestanaActiva === 'estadisticas' && (
+          <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Variacion de Kilometraje</h2>
+                <p className="text-sm text-slate-500 mt-1">Ultimos 15 dias de registro</p>
+              </div>
+              <div className="w-full sm:w-auto">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Vehiculo</label>
+                <select value={vehiculoEstadistica} onChange={(e) => setVehiculoEstadistica(e.target.value)} className="w-full sm:w-64 p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none font-bold text-slate-700">
+                  {vehiculosConReportes.length === 0 ? (<option value="">Sin registros</option>) : (vehiculosConReportes.map(v => (<option key={v} value={v}>{v}</option>)))}
+                </select>
+              </div>
+            </div>
+
+            {estadisticas.datos.length === 0 ? (
+              <div className="flex items-center justify-center h-64 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                <p className="text-slate-400 font-medium">Necesitas reportes en al menos 2 dias distintos para generar la grafica.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                
+                <div className="lg:col-span-3 h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={estadisticas.datos} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="fecha" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
+                      <YAxis tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val} km`} />
+                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variacion']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
+                      <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                      <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Dia" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="lg:col-span-1 flex flex-col gap-4">
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Periodo</p>
+                    <p className="text-3xl font-black text-slate-800">{estadisticas.kpis?.total.toLocaleString()} <span className="text-base font-medium text-slate-500">km</span></p>
+                  </div>
+                  
+                  <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
+                    <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Promedio Diario</p>
+                    <p className="text-3xl font-black text-blue-700">{estadisticas.kpis?.promedio.toLocaleString()} <span className="text-base font-medium text-blue-500">km</span></p>
+                  </div>
+                  
+                  <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
+                    <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-1">Pico Maximo</p>
+                    <p className="text-3xl font-black text-orange-700">{estadisticas.kpis?.maximo.kms.toLocaleString()} <span className="text-base font-medium text-orange-500">km</span></p>
+                    <p className="text-sm font-medium text-orange-600 mt-2">Registrado el {estadisticas.kpis?.maximo.fecha}</p>
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CONTENIDO USUARIOS */}
         {pestanaActiva === 'usuarios' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
