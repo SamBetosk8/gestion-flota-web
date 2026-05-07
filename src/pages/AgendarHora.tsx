@@ -113,7 +113,7 @@ export default function AgendarHora() {
     if (!confirmar) return;
 
     const tallerDestino = talleres.find(t => t.id === tallerSeleccionado);
-    const nombreTallerDestino = tallerDestino ? `${tallerDestino.nombreTaller} - ${tallerDestino.ciudadTaller ? tallerDestino.direccionTaller + ', ' + tallerDestino.ciudadTaller : tallerDestino.ubicacionTaller}` : 'Externo Asociado';
+    const direccionTallerDestino = tallerDestino ? (tallerDestino.ciudadTaller ? `${tallerDestino.direccionTaller}, ${tallerDestino.ciudadTaller}` : tallerDestino.ubicacionTaller) : '';
 
     setGuardando(true);
     try {
@@ -124,7 +124,8 @@ export default function AgendarHora() {
         hora: horaSeleccionada,
         estado: 'pendiente',
         motivo: fallaEspecifica || 'Mantenimiento preventivo',
-        tipoTaller: nombreTallerDestino,
+        tipoTaller: tallerDestino?.nombreTaller || 'Externo Asociado',
+        direccionCompletaTaller: direccionTallerDestino,
         tallerId: tallerSeleccionado,
         esquemaPago: '80% Taller / 20% Ecopanta',
         fechaRegistro: serverTimestamp()
@@ -141,7 +142,8 @@ export default function AgendarHora() {
 
   const tallerActual = talleres.find(t => t.id === tallerSeleccionado);
   
-  const direccionCompleta = tallerActual ? (tallerActual.ciudadTaller ? `${tallerActual.direccionTaller}, ${tallerActual.ciudadTaller}` : tallerActual.ubicacionTaller || tallerActual.direccionTaller) : '';
+  // Usamos SOLAMENTE la dirección y la ciudad para no confundir a Google Maps con nombres de locales que no existen en su base
+  const direccionParaMapa = tallerActual ? (tallerActual.ciudadTaller ? `${tallerActual.direccionTaller}, ${tallerActual.ciudadTaller}` : tallerActual.ubicacionTaller || tallerActual.direccionTaller) : '';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center p-6">
@@ -183,6 +185,7 @@ export default function AgendarHora() {
             </div>
           )}
 
+          {/* TARJETA DE TALLER CON MAPA INCRUSTADO */}
           {tallerActual && (
             <div className="mb-6 bg-white p-4 rounded-2xl border-2 border-blue-100 shadow-sm flex flex-col animate-fade-in">
               <div className="mb-3">
@@ -198,7 +201,7 @@ export default function AgendarHora() {
                   height="100%" 
                   frameBorder="0" 
                   style={{ border: 0 }} 
-                  src={`https://maps.google.com/maps?q=${encodeURIComponent(direccionCompleta)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} 
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(direccionParaMapa)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} 
                   allowFullScreen
                   title="Ubicación del Taller"
                 ></iframe>
@@ -208,7 +211,7 @@ export default function AgendarHora() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                 </svg>
-                <span className="leading-tight">{direccionCompleta}</span>
+                <span className="leading-tight">{direccionParaMapa}</span>
               </div>
             </div>
           )}

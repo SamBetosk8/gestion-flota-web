@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, query, orderBy, getDocs, deleteDoc, doc, where, updateDoc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, deleteDoc, doc, where, updateDoc, addDoc, serverTimestamp, setDoc, limit } from 'firebase/firestore';
 import { getAuth, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { initializeApp, deleteApp } from 'firebase/app';
@@ -45,14 +45,41 @@ export default function DashboardAdmin() {
   
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
-  
-  // Modificado para separar Direccion y Ciudad
   const [formUsuario, setFormUsuario] = useState({ 
     email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada' 
   });
   const [creandoUsuario, setCreandoUsuario] = useState(false);
 
+  // NUEVO: Estado para el historial de auditoria
+  const [historialAcciones, setHistorialAcciones] = useState<any[]>([]);
+
+  // NUEVO: Función para registrar cualquier cambio en el sistema
+  const logAccion = async (accion: string, detalles: string) => {
+    try {
+      const user = auth.currentUser;
+      await addDoc(collection(db, 'historial_acciones'), {
+        usuario: user?.email || 'Desconocido',
+        accion,
+        detalles,
+        fecha: serverTimestamp()
+      });
+    } catch (e) {
+      console.error("Error al guardar en el historial", e);
+    }
+  };
+
+  const cargarHistorial = async () => {
+    try {
+      const q = query(collection(db, 'historial_acciones'), orderBy('fecha', 'desc'), limit(100));
+      const snap = await getDocs(q);
+      setHistorialAcciones(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error("Error al cargar historial:", error);
+    }
+  };
+
   const manejarCerrarSesion = async () => {
+    await logAccion('CIERRE_SESION', 'El administrador cerró su sesión');
     await signOut(auth);
     navigate('/login');
   };
@@ -90,6 +117,7 @@ export default function DashboardAdmin() {
             nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: ''
           })
         });
+        await logAccion('EDITAR_USUARIO', `Se actualizó el perfil de: ${formUsuario.email} (Rol: ${formUsuario.rol})`);
         alert("Usuario actualizado correctamente.");
       } else {
         if (formUsuario.password.length < 6) {
@@ -114,6 +142,7 @@ export default function DashboardAdmin() {
         });
 
         await deleteApp(secondaryApp);
+        await logAccion('CREAR_USUARIO', `Se creó el usuario: ${formUsuario.email} (Rol: ${formUsuario.rol})`);
         alert("Usuario creado exitosamente.");
       }
       limpiarFormUsuario();
@@ -127,12 +156,14 @@ export default function DashboardAdmin() {
   };
 
   const editarUsuario = (user: any) => {
+    // CORRECCIÓN: Nos aseguramos de leer exactamente el rol que tiene para que no se resetee a admin por accidente
+    const rolActual = user.rol === 'taller' ? 'taller' : 'admin';
     setFormUsuario({
       email: user.email,
       password: '',
-      rol: user.rol || 'admin',
+      rol: rolActual,
       nombreTaller: user.nombreTaller || '',
-      direccionTaller: user.direccionTaller || user.ubicacionTaller || '', // Fallback por si hay datos viejos
+      direccionTaller: user.direccionTaller || user.ubicacionTaller || '',
       ciudadTaller: user.ciudadTaller || '',
       especialidadTaller: user.especialidadTaller || 'Mecánica Integrada'
     });
@@ -140,11 +171,12 @@ export default function DashboardAdmin() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const eliminarUsuario = async (id: string) => {
+  const eliminarUsuario = async (id: string, email: string) => {
     const confirmar = window.confirm("¿Eliminar el perfil de este usuario de la base de datos?");
     if (!confirmar) return;
     try {
       await deleteDoc(doc(db, 'usuarios', id));
+      await logAccion('ELIMINAR_USUARIO', `Se eliminó el usuario con correo: ${email}`);
       cargarUsuarios();
     } catch (error) {
       console.error(error);
@@ -170,20 +202,22 @@ export default function DashboardAdmin() {
     }
   };
 
-  const actualizarEstadoCita = async (idCita: string, nuevoEstado: string) => {
+  const actualizarEstadoCita = async (idCita: string, nuevoEstado: string, patente: string) => {
     try {
       await updateDoc(doc(db, 'citas_taller', idCita), { estado: nuevoEstado });
+      await logAccion('ACTUALIZAR_CITA', `Se cambió a '${nuevoEstado}' la cita del vehículo: ${patente}`);
       cargarCitas();
     } catch (error) {
       console.error("Error actualizando cita:", error);
     }
   };
 
-  const eliminarCita = async (idCita: string) => {
+  const eliminarCita = async (idCita: string, patente: string) => {
     const confirmar = window.confirm("¿Seguro que deseas eliminar esta cita permanentemente?");
     if (!confirmar) return;
     try {
       await deleteDoc(doc(db, 'citas_taller', idCita));
+      await logAccion('ELIMINAR_CITA', `Se eliminó la cita médica del vehículo: ${patente}`);
       cargarCitas();
     } catch (error) {
       console.error("Error borrando cita:", error);
@@ -210,6 +244,12 @@ export default function DashboardAdmin() {
     setLimiteVehiculos(10);
     setLimiteQRs(12);
   }, [pestanaActiva, busqueda, filtroEstado, filtroTipoVehiculo]);
+
+  useEffect(() => {
+    if (pestanaActiva === 'auditoria') {
+      cargarHistorial();
+    }
+  }, [pestanaActiva]);
 
   useEffect(() => {
     if (pestanaActiva === 'reportes' || pestanaActiva === 'estadisticas') {
@@ -288,7 +328,7 @@ export default function DashboardAdmin() {
     if (pestanaActiva === 'usuarios') cargarUsuarios();
   }, [pestanaActiva]);
 
-  const eliminarReporteIndividual = async (id: string, fotoPath: string | null) => {
+  const eliminarReporteIndividual = async (id: string, fotoPath: string | null, patente: string) => {
     const confirmar = window.confirm("Estas seguro de que deseas eliminar este registro de forma permanente?");
     if (!confirmar) return;
 
@@ -298,6 +338,7 @@ export default function DashboardAdmin() {
         await deleteObject(fotoRef).catch(e => console.log("Error o foto ya borrada:", e));
       }
       await deleteDoc(doc(db, 'reportes', id));
+      await logAccion('ELIMINAR_REPORTE', `Se eliminó el reporte diario del vehículo: ${patente}`);
       setReportes(prev => prev.filter(r => r.id !== id));
     } catch (error) {
       console.error(error);
@@ -318,6 +359,7 @@ export default function DashboardAdmin() {
         await deleteDoc(doc(db, 'reportes', rep.id));
       }
       setReportes([]);
+      await logAccion('ELIMINAR_TODOS_REPORTES', `Se vació completamente la base de datos de reportes`);
       alert("Todos los registros han sido eliminados correctamente.");
     } catch (error) {
       console.error(error);
@@ -370,6 +412,7 @@ export default function DashboardAdmin() {
       if (!querySnapshot.empty) {
         const idVehiculoExistente = querySnapshot.docs[0].id;
         await updateDoc(doc(db, 'vehiculos', idVehiculoExistente), datosVehiculo);
+        await logAccion('ACTUALIZAR_VEHICULO', `Se actualizaron los datos/documentos del vehículo: ${patenteMayuscula}`);
         alert("Datos y documentos actualizados correctamente.");
       } else {
         await addDoc(collection(db, 'vehiculos'), {
@@ -377,6 +420,7 @@ export default function DashboardAdmin() {
           patente: patenteMayuscula,
           fechaRegistro: serverTimestamp()
         });
+        await logAccion('REGISTRAR_VEHICULO', `Se ingresó un nuevo vehículo al sistema: ${patenteMayuscula}`);
         alert("Vehiculo registrado correctamente.");
       }
 
@@ -420,11 +464,12 @@ export default function DashboardAdmin() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const eliminarVehiculo = async (id: string) => {
+  const eliminarVehiculo = async (id: string, patente: string) => {
     const confirmar = window.confirm("Estas seguro de que deseas eliminar este vehiculo del sistema?");
     if (confirmar) {
       try {
         await deleteDoc(doc(db, 'vehiculos', id));
+        await logAccion('ELIMINAR_VEHICULO', `Se borró el vehículo de la base de datos: ${patente}`);
         setVehiculos(prev => prev.filter(v => v.id !== id));
       } catch (error) {
         console.error(error);
@@ -721,6 +766,7 @@ export default function DashboardAdmin() {
           <button onClick={() => setPestanaActiva('agenda')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'agenda' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Agenda Taller</button>
           <button onClick={() => setPestanaActiva('estadisticas')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'estadisticas' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Estadisticas</button>
           <button onClick={() => setPestanaActiva('usuarios')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'usuarios' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Usuarios</button>
+          <button onClick={() => setPestanaActiva('auditoria')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'auditoria' ? 'bg-amber-500 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Auditoria</button>
         </div>
 
         {/* CONTENIDO REPORTES */}
@@ -778,7 +824,7 @@ export default function DashboardAdmin() {
                       <td className="p-4 text-center">
                         <div className="flex justify-center gap-2">
                           <button onClick={() => setReporteSeleccionado(rep)} className="text-xs font-bold px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-100">Ver Detalles</button>
-                          <button onClick={() => eliminarReporteIndividual(rep.id, rep.fotoPath)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100">Eliminar</button>
+                          <button onClick={() => eliminarReporteIndividual(rep.id, rep.fotoPath, rep.vehiculoId)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100">Eliminar</button>
                         </div>
                       </td>
                     </tr>
@@ -1014,7 +1060,7 @@ export default function DashboardAdmin() {
                           </td>
                           <td className="p-4 flex gap-2 justify-center mt-2">
                             <button onClick={() => editarVehiculoEnFormulario(vehiculo)} className="text-xs font-bold px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">Editar</button>
-                            <button onClick={() => eliminarVehiculo(vehiculo.id)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Eliminar</button>
+                            <button onClick={() => eliminarVehiculo(vehiculo.id, vehiculo.patente)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Eliminar</button>
                           </td>
                         </tr>
                       );
@@ -1119,11 +1165,11 @@ export default function DashboardAdmin() {
                         </td>
                         <td className="p-4 font-black text-blue-600 text-lg">{cita.patente}</td>
                         <td className="p-4">
-                          <div className="text-sm font-bold text-slate-700">{cita.tipoTaller || 'Taller Externo'}</div>
+                          <div className="text-sm font-bold text-slate-700">{cita.nombreTallerDestino || cita.tipoTaller || 'Taller Externo'}</div>
                           {/* BOTON PARA UBICAR TALLER EN MAPA DESDE EL ADMIN */}
-                          {cita.tipoTaller && cita.tipoTaller !== 'Externo Asociado' && (
+                          {cita.direccionCompletaTaller && (
                             <a 
-                              href={`https://maps.google.com/maps/search/?api=1&query=${encodeURIComponent(cita.tipoTaller)}`} 
+                              href={`https://www.google.com/maps/search/taller+${encodeURIComponent(cita.direccionCompletaTaller)}`} 
                               target="_blank" 
                               rel="noopener noreferrer" 
                               className="text-[10px] text-blue-500 font-bold hover:text-blue-700 hover:underline flex items-center gap-1 mt-1"
@@ -1149,11 +1195,11 @@ export default function DashboardAdmin() {
                             )}
                             {cita.estado === 'pendiente' && (
                               <>
-                                <button onClick={() => actualizarEstadoCita(cita.id, 'completada')} className="text-xs font-bold px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 border border-green-200">Completar</button>
-                                <button onClick={() => actualizarEstadoCita(cita.id, 'cancelada')} className="text-xs font-bold px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 border border-slate-200">Cancelar</button>
+                                <button onClick={() => actualizarEstadoCita(cita.id, 'completada', cita.patente)} className="text-xs font-bold px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 border border-green-200">Completar</button>
+                                <button onClick={() => actualizarEstadoCita(cita.id, 'cancelada', cita.patente)} className="text-xs font-bold px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 border border-slate-200">Cancelar</button>
                               </>
                             )}
-                            <button onClick={() => eliminarCita(cita.id)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 border border-red-200">Eliminar</button>
+                            <button onClick={() => eliminarCita(cita.id, cita.patente)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 border border-red-200">Eliminar</button>
                           </div>
                         </td>
                       </tr>
@@ -1251,65 +1297,6 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO ESTADISTICAS */}
-        {pestanaActiva === 'estadisticas' && (
-          <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">Variacion de Kilometraje</h2>
-                <p className="text-sm text-slate-500 mt-1">Ultimos 15 dias de registro</p>
-              </div>
-              <div className="w-full sm:w-auto">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Vehiculo</label>
-                <select value={vehiculoEstadistica} onChange={(e) => setVehiculoEstadistica(e.target.value)} className="w-full sm:w-64 p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none font-bold text-slate-700">
-                  {vehiculosConReportes.length === 0 ? (<option value="">Sin registros</option>) : (vehiculosConReportes.map(v => (<option key={v} value={v}>{v}</option>)))}
-                </select>
-              </div>
-            </div>
-
-            {estadisticas.datos.length === 0 ? (
-              <div className="flex items-center justify-center h-64 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                <p className="text-slate-400 font-medium">Necesitas reportes en al menos 2 dias distintos para generar la grafica.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                
-                <div className="lg:col-span-3 h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={estadisticas.datos} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis dataKey="fecha" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
-                      <YAxis tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val} km`} />
-                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variacion']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
-                      <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                      <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Dia" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="lg:col-span-1 flex flex-col gap-4">
-                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Periodo</p>
-                    <p className="text-3xl font-black text-slate-800">{estadisticas.kpis?.total.toLocaleString()} <span className="text-base font-medium text-slate-500">km</span></p>
-                  </div>
-                  
-                  <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
-                    <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Promedio Diario</p>
-                    <p className="text-3xl font-black text-blue-700">{estadisticas.kpis?.promedio.toLocaleString()} <span className="text-base font-medium text-blue-500">km</span></p>
-                  </div>
-                  
-                  <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
-                    <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-1">Pico Maximo</p>
-                    <p className="text-3xl font-black text-orange-700">{estadisticas.kpis?.maximo.kms.toLocaleString()} <span className="text-base font-medium text-orange-500">km</span></p>
-                    <p className="text-sm font-medium text-orange-600 mt-2">Registrado el {estadisticas.kpis?.maximo.fecha}</p>
-                  </div>
-                </div>
-
-              </div>
-            )}
-          </div>
-        )}
-
         {/* CONTENIDO USUARIOS (DISEÑO SEPARADO: DIRECCION Y CIUDAD) */}
         {pestanaActiva === 'usuarios' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -1403,13 +1390,55 @@ export default function DashboardAdmin() {
                         </td>
                         <td className="p-4 flex gap-2 justify-center mt-2">
                           <button onClick={() => editarUsuario(user)} className="text-xs font-bold px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">Editar</button>
-                          <button onClick={() => eliminarUsuario(user.id)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Borrar</button>
+                          <button onClick={() => eliminarUsuario(user.id, user.email)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Borrar</button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* CONTENIDO AUDITORIA (NUEVA PESTAÑA HISTORIAL INBORRABLE) */}
+        {pestanaActiva === 'auditoria' && (
+          <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
+            <div className="p-6 bg-slate-50 border-b border-slate-100">
+              <h2 className="text-xl font-bold text-slate-800">Historial de Auditoría</h2>
+              <p className="text-sm text-slate-500 mt-1">Registro inmutable de todas las acciones importantes realizadas en la plataforma.</p>
+            </div>
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider sticky top-0 shadow-sm">
+                    <th className="p-4 font-bold">Fecha / Hora</th>
+                    <th className="p-4 font-bold">Usuario</th>
+                    <th className="p-4 font-bold">Acción</th>
+                    <th className="p-4 font-bold">Detalles</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {historialAcciones.length === 0 ? (
+                    <tr><td colSpan={4} className="p-8 text-center text-slate-400">No hay registros de auditoría.</td></tr>
+                  ) : (
+                    historialAcciones.map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-50">
+                        <td className="p-4 text-xs text-slate-500 font-mono whitespace-nowrap">
+                          {log.fecha ? log.fecha.toDate().toLocaleString() : 'Reciente'}
+                        </td>
+                        <td className="p-4 font-bold text-slate-700 text-sm">{log.usuario}</td>
+                        <td className="p-4">
+                          <span className="bg-slate-200 text-slate-700 text-[10px] font-black uppercase px-2 py-1 rounded">
+                            {log.accion.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="p-4 text-sm text-slate-600">{log.detalles}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

@@ -14,7 +14,6 @@ export default function DashboardTaller() {
   const [vehiculoData, setVehiculoData] = useState<any>(null);
   const [proxMantenimiento, setProxMantenimiento] = useState<string>('');
   
-  // NUEVO: Para guardar el perfil del taller logueado
   const [perfilTaller, setPerfilTaller] = useState<any>(null);
 
   const [formCamioneta, setFormCamioneta] = useState({
@@ -41,7 +40,23 @@ export default function DashboardTaller() {
     observaciones: ''
   });
 
+  // NUEVO: Función para registrar acciones
+  const logAccion = async (accion: string, detalles: string) => {
+    try {
+      const user = auth.currentUser;
+      await addDoc(collection(db, 'historial_acciones'), {
+        usuario: user?.email || 'Taller Desconocido',
+        accion,
+        detalles,
+        fecha: serverTimestamp()
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const manejarCerrarSesion = async () => {
+    await logAccion('CIERRE_SESION_TALLER', 'Un taller cerró su sesión');
     await signOut(auth);
     navigate('/login');
   };
@@ -51,13 +66,11 @@ export default function DashboardTaller() {
       const user = auth.currentUser;
       if (!user) return;
       
-      // Obtener el perfil del taller
       const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
       if (userDoc.exists()) {
         setPerfilTaller(userDoc.data());
       }
       
-      // Obtener las citas
       const q = query(collection(db, 'citas_taller'), where('tallerId', '==', user.uid));
       const querySnapshot = await getDocs(q);
       
@@ -130,13 +143,15 @@ export default function DashboardTaller() {
     const datosOT = tipo === 'camioneta' ? formCamioneta : formPesado;
 
     try {
+      const nombreCreador = perfilTaller ? perfilTaller.nombreTaller : 'Taller Asociado';
+
       await addDoc(collection(db, 'ordenes_trabajo'), {
         idCita: citaSeleccionada.id,
         patente: citaSeleccionada.patente,
         tipoVehiculo: vehiculoData.tipo,
         datos: datosOT,
         fechaCreacion: serverTimestamp(),
-        creadoPor: perfilTaller ? perfilTaller.nombreTaller : 'Taller Asociado'
+        creadoPor: nombreCreador
       });
 
       await updateDoc(doc(db, 'citas_taller', citaSeleccionada.id), {
@@ -148,6 +163,8 @@ export default function DashboardTaller() {
           kilometrajeTaller: proxMantenimiento
         });
       }
+
+      await logAccion('CREAR_OT', `El taller ${nombreCreador} generó la Orden de Trabajo para el vehículo ${citaSeleccionada.patente}`);
 
       alert("Orden de Trabajo guardada y proximo mantenimiento actualizado.");
       seleccionarCita(citaSeleccionada);
@@ -171,7 +188,7 @@ export default function DashboardTaller() {
                 <span className="text-sm font-bold text-slate-600">{perfilTaller.nombreTaller}</span>
                 <span className="text-slate-300">|</span>
                 <a 
-                  href={`https://maps.google.com/maps/search/?api=1&query=${encodeURIComponent(perfilTaller.nombreTaller + ' ' + (perfilTaller.ciudadTaller ? perfilTaller.direccionTaller + ', ' + perfilTaller.ciudadTaller : perfilTaller.ubicacionTaller))}`} 
+                  href={`https://www.google.com/maps/search/taller+${encodeURIComponent(perfilTaller.ciudadTaller ? perfilTaller.direccionTaller + ', ' + perfilTaller.ciudadTaller : perfilTaller.ubicacionTaller)}`} 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="text-xs font-bold text-blue-500 hover:text-blue-700 flex items-center gap-1 hover:underline"
