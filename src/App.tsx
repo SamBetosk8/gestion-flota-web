@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './lib/firebase';
-
 import VistaConductor from './pages/VistaConductor';
 import DashboardAdmin from './pages/DashboardAdmin';
 import DashboardTaller from './pages/DashboardTaller';
@@ -44,7 +43,9 @@ function RutaPrivada({ children, rolPermitido }: { children: React.ReactNode, ro
   if (!usuario) return <Navigate to="/login" />;
   
   if (rolPermitido && rolUsuario !== rolPermitido && rolUsuario !== 'admin') {
-    return <Navigate to={rolUsuario === 'taller' ? '/taller' : '/admin'} />;
+    if (rolUsuario === 'taller') return <Navigate to="/taller" />;
+    if (rolUsuario === 'generador_qr') return <Navigate to="/generador" />;
+    return <Navigate to="/admin" />;
   }
   
   return <>{children}</>;
@@ -55,28 +56,12 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Navigate to="/login" />} />
-        
         <Route path="/v/:id" element={<VistaConductor />} />
         <Route path="/agendar/:id" element={<AgendarHora />} />
         <Route path="/login" element={<Login />} />
-
-        <Route path="/admin" element={
-          <RutaPrivada rolPermitido="admin">
-            <DashboardAdmin />
-          </RutaPrivada>
-        } />
-        
-        <Route path="/taller" element={
-          <RutaPrivada rolPermitido="taller">
-            <DashboardTaller />
-          </RutaPrivada>
-        } />
-        
-        <Route path="/generador" element={
-          <RutaPrivada rolPermitido="admin">
-            <GeneradorQR />
-          </RutaPrivada>
-        } />
+        <Route path="/admin" element={<RutaPrivada rolPermitido="admin"><DashboardAdmin /></RutaPrivada>} />
+        <Route path="/taller" element={<RutaPrivada rolPermitido="taller"><DashboardTaller /></RutaPrivada>} />
+        <Route path="/generador" element={<RutaPrivada rolPermitido="generador_qr"><GeneradorQR /></RutaPrivada>} />
       </Routes>
     </BrowserRouter>
   );

@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -11,8 +12,26 @@ export default function GeneradorQR() {
   const [patente, setPatente] = useState('HBL123');
   const [tipoVehiculo, setTipoVehiculo] = useState('Camioneta');
   const [procesando, setProcesando] = useState(false);
+  const [rol, setRol] = useState('admin');
+  const navigate = useNavigate();
   
   const urlVehiculo = `https://gestion-flota-web.vercel.app/v/${patente.toUpperCase()}`;
+
+  useEffect(() => {
+    const fetchRol = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+        if (userDoc.exists()) setRol(userDoc.data().rol);
+      }
+    };
+    fetchRol();
+  }, []);
+
+  const manejarCerrarSesion = async () => {
+    await signOut(auth);
+    navigate('/login');
+  };
 
   const guardarYDescargar = async () => {
     if (!patente) return;
@@ -34,7 +53,7 @@ export default function GeneradorQR() {
             const creados = userData.qrsCreados || 0;
             
             if (creados >= limite) {
-              alert(`Has alcanzado el límite de tu plan (${limite} QRs). Por favor, contacta a la administración para aumentar tu plan.`);
+              alert(`Has alcanzado el límite de tu plan (${limite} QRs). Por favor, contacta a la administración para subir de plan.`);
               setProcesando(false);
               return;
             }
@@ -70,37 +89,23 @@ export default function GeneradorQR() {
       }
 
       if (esGeneradorRestringido && userDocRef) {
-        await updateDoc(userDocRef, {
-          qrsCreados: increment(1)
-        });
+        await updateDoc(userDocRef, { qrsCreados: increment(1) });
       }
 
       const elemento = document.getElementById('tarjeta-pdf-generador');
       if (elemento) {
         await toPng(elemento, { cacheBust: true });
-
-        const imgData = await toPng(elemento, { 
-          quality: 1, 
-          pixelRatio: 3,
-          backgroundColor: '#ffffff',
-          cacheBust: true,
-        });
-
+        const imgData = await toPng(elemento, { quality: 1, pixelRatio: 3, backgroundColor: '#ffffff', cacheBust: true });
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
         
         const nombreArchivo = `QR_${patenteMayuscula}.pdf`;
         const esCelular = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        
         const pdfBlob = pdf.output('blob');
         const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
         if (esCelular && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file] });
-          } catch (e) {
-            pdf.save(nombreArchivo);
-          }
+          try { await navigator.share({ files: [file] }); } catch (e) { pdf.save(nombreArchivo); }
         } else {
           pdf.save(nombreArchivo);
         }
@@ -116,7 +121,6 @@ export default function GeneradorQR() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative z-10 overflow-hidden">
-      
       <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px' }}>
           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
@@ -146,11 +150,7 @@ export default function GeneradorQR() {
           <label className="block text-xs font-black text-slate-400 uppercase mb-3 text-left ml-1">Tipo de Vehiculo</label>
           <div className="flex gap-2">
             {['Tracto camión', 'Semirremolque', 'Camioneta'].map((tipo) => (
-              <button 
-                key={tipo}
-                onClick={() => setTipoVehiculo(tipo)}
-                className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${tipoVehiculo === tipo ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
-              >
+              <button key={tipo} onClick={() => setTipoVehiculo(tipo)} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${tipoVehiculo === tipo ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
                 {tipo}
               </button>
             ))}
@@ -158,17 +158,15 @@ export default function GeneradorQR() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <button 
-            onClick={guardarYDescargar} 
-            disabled={procesando} 
-            className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${procesando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-          >
+          <button onClick={guardarYDescargar} disabled={procesando} className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${procesando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
             {procesando ? 'Procesando...' : 'Guardar y Descargar PDF'}
           </button>
           
-          <Link to="/admin" className="block mt-2 text-slate-500 font-bold hover:text-slate-800 transition-colors">
-            Volver al Panel Admin
-          </Link>
+          {rol === 'admin' ? (
+            <Link to="/admin" className="block mt-2 text-slate-500 font-bold hover:text-slate-800 transition-colors">Volver al Panel Admin</Link>
+          ) : (
+            <button onClick={manejarCerrarSesion} className="block mt-2 text-red-500 font-bold hover:text-red-700 transition-colors w-full">Cerrar Sesión</button>
+          )}
         </div>
       </div>
     </div>

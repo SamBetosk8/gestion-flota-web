@@ -45,7 +45,6 @@ export default function DashboardAdmin() {
   
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
-  
   const [formUsuario, setFormUsuario] = useState({ 
     email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10 
   });
@@ -84,9 +83,7 @@ export default function DashboardAdmin() {
 
   const cargarUsuarios = async () => {
     try {
-      // Filtramos para asegurar que el admin vea principalmente usuarios de ESTE proyecto
-      // Si tienes usuarios antiguos sin el campo "proyecto", los verás igual si quitas el where.
-      const q = query(collection(db, 'usuarios')); 
+      const q = query(collection(db, 'usuarios'), where('proyecto', '==', 'gestion_flota'));
       const snap = await getDocs(q);
       const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setUsuariosRegistrados(users);
@@ -105,28 +102,21 @@ export default function DashboardAdmin() {
     setCreandoUsuario(true);
 
     try {
-      const datosUsuario: any = {
-        rol: formUsuario.rol,
-        proyecto: 'gestion_flota' // Blindaje para separar proyectos
-      };
+      const datosUsuario: any = { rol: formUsuario.rol, proyecto: 'gestion_flota' };
 
       if (formUsuario.rol === 'taller') {
         datosUsuario.nombreTaller = formUsuario.nombreTaller;
         datosUsuario.direccionTaller = formUsuario.direccionTaller;
         datosUsuario.ciudadTaller = formUsuario.ciudadTaller;
         datosUsuario.especialidadTaller = formUsuario.especialidadTaller;
-      }
-
-      if (formUsuario.rol === 'generador_qr') {
+      } else if (formUsuario.rol === 'generador_qr') {
         datosUsuario.limiteQR = Number(formUsuario.limiteQR);
-        if (!editandoUsuarioId) {
-          datosUsuario.qrsCreados = 0;
-        }
+        if (!editandoUsuarioId) datosUsuario.qrsCreados = 0;
       }
 
       if (editandoUsuarioId) {
         await updateDoc(doc(db, 'usuarios', editandoUsuarioId), datosUsuario);
-        await logAccion('EDITAR_USUARIO', `Actualizado perfil: ${formUsuario.email} (Rol: ${formUsuario.rol})`);
+        await logAccion('EDITAR_USUARIO', `Actualizado perfil: ${formUsuario.email}`);
         alert("Usuario actualizado.");
       } else {
         if (formUsuario.password.length < 6) {
@@ -143,9 +133,8 @@ export default function DashboardAdmin() {
           ...datosUsuario,
           fechaCreacion: serverTimestamp()
         });
-
         await deleteApp(secondaryApp);
-        await logAccion('CREAR_USUARIO', `Usuario creado: ${formUsuario.email} (Rol: ${formUsuario.rol})`);
+        await logAccion('CREAR_USUARIO', `Usuario creado: ${formUsuario.email}`);
         alert("Usuario creado exitosamente.");
       }
       limpiarFormUsuario();
@@ -247,9 +236,7 @@ export default function DashboardAdmin() {
   }, [pestanaActiva, busqueda, filtroEstado, filtroTipoVehiculo]);
 
   useEffect(() => {
-    if (pestanaActiva === 'auditoria') {
-      cargarHistorial();
-    }
+    if (pestanaActiva === 'auditoria') cargarHistorial();
   }, [pestanaActiva]);
 
   useEffect(() => {
@@ -259,10 +246,8 @@ export default function DashboardAdmin() {
           const q = query(collection(db, 'reportes'), orderBy('fecha', 'asc'));
           const querySnapshot = await getDocs(q);
           const reportesData: any[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          
           const limiteDias = new Date();
           limiteDias.setDate(limiteDias.getDate() - 15);
-          
           const reportesValidos = [];
 
           for (const rep of reportesData) {
@@ -286,7 +271,6 @@ export default function DashboardAdmin() {
               reportesValidos.push(rep); 
             }
           }
-
           setReportes(reportesValidos.reverse());
         } catch (error) {
           console.error(error);
@@ -332,7 +316,6 @@ export default function DashboardAdmin() {
   const eliminarReporteIndividual = async (id: string, fotoPath: string | null, patente: string) => {
     const confirmar = window.confirm("¿Eliminar este registro permanentemente?");
     if (!confirmar) return;
-
     try {
       if (fotoPath) {
         const fotoRef = ref(storage, fotoPath);
@@ -349,7 +332,6 @@ export default function DashboardAdmin() {
   const eliminarTodosLosReportes = async () => {
     const confirmar = window.confirm("ADVERTENCIA: ¿Eliminar TODOS los registros?");
     if (!confirmar) return;
-
     try {
       for (const rep of reportes) {
         if (rep.fotoPath && !rep.fotoEliminada) {
@@ -378,14 +360,12 @@ export default function DashboardAdmin() {
         await uploadBytes(revRef, pdfRevision);
         urlRev = await getDownloadURL(revRef);
       }
-
       let urlCirc = formVehiculo.urlCirculacion;
       if (pdfCirculacion) {
         const circRef = ref(storage, `documentos/${patenteMayuscula}/circulacion.pdf`);
         await uploadBytes(circRef, pdfCirculacion);
         urlCirc = await getDownloadURL(circRef);
       }
-
       let urlCert = formVehiculo.urlCertificado;
       if (pdfCertificado) {
         const certRef = ref(storage, `documentos/${patenteMayuscula}/certificado.pdf`);
@@ -425,11 +405,9 @@ export default function DashboardAdmin() {
 
       setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '' });
       setPdfRevision(null); setPdfCirculacion(null); setPdfCertificado(null);
-      
       const fileRev = document.getElementById('file-rev') as HTMLInputElement; if (fileRev) fileRev.value = "";
       const fileCirc = document.getElementById('file-circ') as HTMLInputElement; if (fileCirc) fileCirc.value = "";
       const fileCert = document.getElementById('file-cert') as HTMLInputElement; if (fileCert) fileCert.value = "";
-
       cargarVehiculos();
     } catch (error) {
       console.error(error);
@@ -483,12 +461,10 @@ export default function DashboardAdmin() {
   const sincronizarQRsAntiguos = async () => {
     const confirmar = window.confirm("¿Sincronizar QRs antiguos?");
     if (!confirmar) return;
-
     setSincronizando(true);
     try {
       const qrsSnap = await getDocs(collection(db, 'qrs_guardados'));
       const vehsSnap = await getDocs(collection(db, 'vehiculos'));
-      
       const patentesVehiculos = new Set(vehsSnap.docs.map(doc => doc.data().patente));
       let agregados = 0;
 
@@ -514,7 +490,6 @@ export default function DashboardAdmin() {
           agregados++;
         }
       }
-
       if (agregados > 0) {
         alert(`Sincronizados ${agregados} vehiculos.`);
         cargarVehiculos();
@@ -693,7 +668,7 @@ export default function DashboardAdmin() {
         {pestanaActiva === 'reportes' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-              <h2 className="text-xl font-bold text-slate-800">Registros Diarios {filtroTipoVehiculo !== 'todos' && <span className="text-sm font-normal text-slate-500">({filtroTipoVehiculo}s)</span>}</h2>
+              <h2 className="text-xl font-bold text-slate-800">Registros Diarios</h2>
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                 <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
                   <button onClick={() => setFiltroEstado('todos')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'todos' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Todos</button>
@@ -748,7 +723,6 @@ export default function DashboardAdmin() {
             <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
               <h3 className="text-2xl font-black text-slate-800 mb-1 border-b border-slate-100 pb-4">Detalles del Checklist</h3>
               <p className="text-sm text-slate-500 mb-6 mt-2">Vehiculo: <span className="font-bold text-slate-800 text-lg">{reporteSeleccionado.vehiculoId}</span></p>
-              
               <div className="max-h-80 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                 {reporteSeleccionado.respuestas ? (
                   Object.entries(reporteSeleccionado.respuestas).map(([k, v]) => (
@@ -897,31 +871,16 @@ export default function DashboardAdmin() {
                           <td className="p-4">
                             <div className="flex flex-col items-start gap-2">
                               <span className={`px-3 py-1 rounded-full text-xs border ${revInfo.clase}`}>{revInfo.texto}</span>
-                              {vehiculo.urlRevision && (
-                                <button onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
-                                  Descargar
-                                </button>
-                              )}
                             </div>
                           </td>
                           <td className="p-4">
                             <div className="flex flex-col items-start gap-2">
                               <span className={`px-3 py-1 rounded-full text-xs border ${circInfo.clase}`}>{circInfo.texto}</span>
-                              {vehiculo.urlCirculacion && (
-                                <button onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
-                                  Descargar
-                                </button>
-                              )}
                             </div>
                           </td>
                           <td className="p-4">
                             <div className="flex flex-col items-start gap-2">
                               <span className={`px-3 py-1 rounded-full text-xs border ${certInfo.clase}`}>{certInfo.texto}</span>
-                              {vehiculo.urlCertificado && (
-                                <button onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
-                                  Descargar
-                                </button>
-                              )}
                             </div>
                           </td>
                           <td className="p-4 flex gap-2 justify-center mt-2">
@@ -938,7 +897,6 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO QRS */}
         {pestanaActiva === 'qrs' && (
           <div>
             {qrsPaginados.length === 0 ? (
@@ -949,10 +907,8 @@ export default function DashboardAdmin() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {qrsPaginados.map((qr) => {
                   const urlCorregida = qr.url?.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, 'https://gestion-flota-web.vercel.app') || '';
-
                   return (
                     <div key={qr.id} className="flex flex-col gap-2 relative">
-                      
                       <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
                         <img src={LOGO_BASE64} alt="Logo" className="h-12 object-contain mx-auto mb-4" />
                         <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
@@ -961,7 +917,6 @@ export default function DashboardAdmin() {
                           <QRCodeSVG value={urlCorregida} size={130} level="H" includeMargin={false} />
                         </div>
                       </div>
-
                       <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
                         <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
@@ -973,30 +928,21 @@ export default function DashboardAdmin() {
                           <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar el checklist.</p>
                         </div>
                       </div>
-
                       <div className="flex gap-2 w-full mt-2 relative z-10">
                         <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-sm">
                           {generandoPdf === qr.patente ? '...' : 'Descargar'}
                         </button>
                         <a href={urlCorregida} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-sm">Probar</a>
                       </div>
-                      
                       <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10 text-sm">Eliminar QR</button>
                     </div>
                   );
                 })}
               </div>
             )}
-            
-            {qrsFiltrados.length > limiteQRs && (
-              <div className="mt-8 text-center">
-                <button onClick={() => setLimiteQRs(prev => prev + 12)} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas QRs</button>
-              </div>
-            )}
           </div>
         )}
 
-        {/* CONTENIDO AGENDA TALLER */}
         {pestanaActiva === 'agenda' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100">
@@ -1026,24 +972,15 @@ export default function DashboardAdmin() {
                         </td>
                         <td className="p-4 font-black text-blue-600 text-lg">{cita.patente}</td>
                         <td className="p-4">
-                          <div className="text-sm font-bold text-slate-700">{cita.tipoTaller || 'Taller Externo'}</div>
+                          <div className="text-sm font-bold text-slate-700">{cita.nombreTallerDestino || cita.tipoTaller || 'Taller Externo'}</div>
                           {cita.direccionCompletaTaller && (
-                            <a 
-                              href={`https://www.google.com/maps/search/taller+${encodeURIComponent(cita.direccionCompletaTaller)}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-[10px] text-blue-500 font-bold hover:text-blue-700 hover:underline flex items-center gap-1 mt-1"
-                            >
+                            <a href={`https://www.google.com/maps/search/taller+${encodeURIComponent(cita.direccionCompletaTaller)}`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 font-bold hover:text-blue-700 hover:underline flex items-center gap-1 mt-1">
                               Ubicar en Mapa
                             </a>
                           )}
                         </td>
                         <td className="p-4 text-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                            cita.estado === 'pendiente' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
-                            cita.estado === 'completada' ? 'bg-green-100 text-green-700 border-green-200' : 
-                            'bg-red-100 text-red-700 border-red-200'
-                          }`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold border ${cita.estado === 'pendiente' ? 'bg-orange-100 text-orange-700 border-orange-200' : cita.estado === 'completada' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
                             {cita.estado.toUpperCase()}
                           </span>
                         </td>
@@ -1070,7 +1007,6 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* VENTANA MODAL PARA VER ORDEN DE TRABAJO */}
         {otSeleccionada && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -1106,7 +1042,6 @@ export default function DashboardAdmin() {
                     <p className="text-sm font-bold text-slate-700">Taller/Técnico: <span className="font-normal">{otSeleccionada.datos.empresaTecnico}</span></p>
                     <p className="text-sm font-bold text-slate-700">Horas Parada: <span className="font-normal">{otSeleccionada.datos.horasParada}</span></p>
                   </div>
-                  
                   {otSeleccionada.datos.tareas && otSeleccionada.datos.tareas.length > 0 && (
                     <div>
                       <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Tareas Realizadas</h4>
@@ -1124,13 +1059,11 @@ export default function DashboardAdmin() {
                   )}
                 </div>
               )}
-
               <button onClick={() => setOtSeleccionada(null)} className="mt-8 w-full bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition-colors shadow-lg">Cerrar</button>
             </div>
           </div>
         )}
 
-        {/* CONTENIDO ESTADISTICAS */}
         {pestanaActiva === 'estadisticas' && (
           <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
@@ -1152,7 +1085,6 @@ export default function DashboardAdmin() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                
                 <div className="lg:col-span-3 h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={estadisticas.datos} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -1171,25 +1103,21 @@ export default function DashboardAdmin() {
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Periodo</p>
                     <p className="text-3xl font-black text-slate-800">{estadisticas.kpis?.total.toLocaleString()} <span className="text-base font-medium text-slate-500">km</span></p>
                   </div>
-                  
                   <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
                     <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Promedio Diario</p>
                     <p className="text-3xl font-black text-blue-700">{estadisticas.kpis?.promedio.toLocaleString()} <span className="text-base font-medium text-blue-500">km</span></p>
                   </div>
-                  
                   <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
                     <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-1">Pico Maximo</p>
                     <p className="text-3xl font-black text-orange-700">{estadisticas.kpis?.maximo.kms.toLocaleString()} <span className="text-base font-medium text-orange-500">km</span></p>
                     <p className="text-sm font-medium text-orange-600 mt-2">Registrado el {estadisticas.kpis?.maximo.fecha}</p>
                   </div>
                 </div>
-
               </div>
             )}
           </div>
         )}
 
-        {/* CONTENIDO USUARIOS (ADMIN, TALLER, GENERADOR QR) */}
         {pestanaActiva === 'usuarios' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
@@ -1248,9 +1176,7 @@ export default function DashboardAdmin() {
                         <option value={20}>Plan Avanzado (20 QRs máximo)</option>
                         <option value={50}>Plan Corporativo (50 QRs máximo)</option>
                       </select>
-                      {editandoUsuarioId && (
-                        <p className="text-xs text-purple-600 mt-2 italic">* Al actualizar el plan no se reiniciará la cantidad de QRs ya creados por el usuario.</p>
-                      )}
+                      {editandoUsuarioId && <p className="text-xs text-purple-600 mt-2 italic">* Al actualizar el plan no se reiniciará la cantidad de QRs ya creados.</p>}
                     </div>
                   </div>
                 )}
@@ -1324,7 +1250,7 @@ export default function DashboardAdmin() {
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100">
               <h2 className="text-xl font-bold text-slate-800">Historial de Auditoría</h2>
-              <p className="text-sm text-slate-500 mt-1">Registro inmutable de todas las acciones importantes realizadas en la plataforma.</p>
+              <p className="text-sm text-slate-500 mt-1">Registro inmutable de todas las acciones importantes.</p>
             </div>
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-left border-collapse">
