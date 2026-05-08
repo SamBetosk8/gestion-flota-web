@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { LOGO_BASE64 } from '../constants';
@@ -12,7 +12,6 @@ export default function GeneradorQR() {
   const [tipoVehiculo, setTipoVehiculo] = useState('Camioneta');
   const [procesando, setProcesando] = useState(false);
   
-  // URL de producción forzada para evitar el error de localhost
   const urlVehiculo = `https://gestion-flota-web.vercel.app/v/${patente.toUpperCase()}`;
 
   const guardarYDescargar = async () => {
@@ -20,8 +19,30 @@ export default function GeneradorQR() {
     setProcesando(true);
     
     try {
+      const user = auth.currentUser;
+      let esGeneradorRestringido = false;
+      let userDocRef = null;
+
+      if (user) {
+        userDocRef = doc(db, 'usuarios', user.uid);
+        const userSnap = await getDoc(userDocRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          if (userData.rol === 'generador_qr') {
+            esGeneradorRestringido = true;
+            const limite = userData.limiteQR || 1;
+            const creados = userData.qrsCreados || 0;
+            
+            if (creados >= limite) {
+              alert(`Has alcanzado el límite de tu plan (${limite} QRs). Por favor, contacta a la administración para aumentar tu plan.`);
+              setProcesando(false);
+              return;
+            }
+          }
+        }
+      }
+
       const patenteMayuscula = patente.toUpperCase();
-      
       const qQR = query(collection(db, 'qrs_guardados'), where('patente', '==', patenteMayuscula));
       const qrSnapshot = await getDocs(qQR);
 
@@ -48,12 +69,16 @@ export default function GeneradorQR() {
         });
       }
 
+      if (esGeneradorRestringido && userDocRef) {
+        await updateDoc(userDocRef, {
+          qrsCreados: increment(1)
+        });
+      }
+
       const elemento = document.getElementById('tarjeta-pdf-generador');
       if (elemento) {
-        // Truco para Safari (iOS): Una llamada previa fuerza la carga del DOM en memoria
         await toPng(elemento, { cacheBust: true });
 
-        // Captura real
         const imgData = await toPng(elemento, { 
           quality: 1, 
           pixelRatio: 3,
@@ -92,7 +117,6 @@ export default function GeneradorQR() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative z-10 overflow-hidden">
       
-      {/* CAMBIO CLAVE: position absolute con opacity 0. Invisible pero procesable por Safari */}
       <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px' }}>
           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />

@@ -18,24 +18,27 @@ export default function Login() {
     setCargando(true);
     
     try {
-      // 1. Iniciar sesión en Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Buscar el rol del usuario en la colección de Firestore
       try {
         const userDocRef = doc(db, 'usuarios', user.uid);
         const userDocSnap = await getDoc(userDocRef);
 
-        // 3. Redirigir según el rol
-        if (userDocSnap.exists() && userDocSnap.data().rol === 'taller') {
-          navigate('/taller');
+        if (userDocSnap.exists()) {
+          const rol = userDocSnap.data().rol;
+          if (rol === 'taller') {
+            navigate('/taller');
+          } else if (rol === 'generador_qr') {
+            navigate('/generador');
+          } else {
+            navigate('/admin');
+          }
         } else {
-          // Si no existe el documento o es admin, enviarlo al panel principal
           navigate('/admin');
         }
       } catch (firestoreErr) {
-        console.error("Error al obtener rol, redirigiendo a admin por defecto:", firestoreErr);
+        console.error("Error al obtener rol:", firestoreErr);
         navigate('/admin');
       }
 
