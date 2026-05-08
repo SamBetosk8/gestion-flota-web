@@ -45,6 +45,7 @@ export default function DashboardAdmin() {
   
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
+  
   const [formUsuario, setFormUsuario] = useState({ 
     email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10 
   });
@@ -88,7 +89,7 @@ export default function DashboardAdmin() {
       const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setUsuariosRegistrados(users);
     } catch (error) {
-      console.error(error);
+      console.error("Error al cargar usuarios:", error);
     }
   };
 
@@ -503,6 +504,7 @@ export default function DashboardAdmin() {
     }
   };
 
+  // RESTAURADA FUNCIÓN PARA FORZAR DESCARGA
   const forzarDescarga = async (url: string, nombreArchivo: string) => {
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
     if (esIOS) { window.open(url, '_blank'); return; }
@@ -668,7 +670,7 @@ export default function DashboardAdmin() {
         {pestanaActiva === 'reportes' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-              <h2 className="text-xl font-bold text-slate-800">Registros Diarios</h2>
+              <h2 className="text-xl font-bold text-slate-800">Registros Diarios {filtroTipoVehiculo !== 'todos' && <span className="text-sm font-normal text-slate-500">({filtroTipoVehiculo}s)</span>}</h2>
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                 <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
                   <button onClick={() => setFiltroEstado('todos')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filtroEstado === 'todos' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Todos</button>
@@ -794,6 +796,14 @@ export default function DashboardAdmin() {
                         <button type="button" onClick={() => { setPdfRevision(null); const el = document.getElementById('file-rev') as HTMLInputElement; if (el) el.value = ''; }} className="text-xs text-red-500 font-bold hover:underline bg-red-50 px-2 py-1 rounded">Quitar</button>
                       </div>
                     )}
+                    {formVehiculo.urlRevision && !pdfRevision && (
+                      <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
+                        <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
+                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlRevision, `Revision_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
+                          Descargar
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -813,6 +823,14 @@ export default function DashboardAdmin() {
                         <button type="button" onClick={() => { setPdfCirculacion(null); const el = document.getElementById('file-circ') as HTMLInputElement; if (el) el.value = ''; }} className="text-xs text-red-500 font-bold hover:underline bg-red-50 px-2 py-1 rounded">Quitar</button>
                       </div>
                     )}
+                    {formVehiculo.urlCirculacion && !pdfCirculacion && (
+                      <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
+                        <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
+                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCirculacion, `Circulacion_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
+                          Descargar
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -830,6 +848,14 @@ export default function DashboardAdmin() {
                       <div className="flex items-center justify-between bg-slate-100 p-2 rounded-xl border border-slate-200">
                         <span className="text-xs text-slate-600 truncate max-w-[150px] font-medium">{pdfCertificado.name}</span>
                         <button type="button" onClick={() => { setPdfCertificado(null); const el = document.getElementById('file-cert') as HTMLInputElement; if (el) el.value = ''; }} className="text-xs text-red-500 font-bold hover:underline bg-red-50 px-2 py-1 rounded">Quitar</button>
+                      </div>
+                    )}
+                    {formVehiculo.urlCertificado && !pdfCertificado && (
+                      <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
+                        <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
+                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCertificado, `Certificado_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
+                          Descargar
+                        </button>
                       </div>
                     )}
                   </div>
@@ -871,16 +897,31 @@ export default function DashboardAdmin() {
                           <td className="p-4">
                             <div className="flex flex-col items-start gap-2">
                               <span className={`px-3 py-1 rounded-full text-xs border ${revInfo.clase}`}>{revInfo.texto}</span>
+                              {vehiculo.urlRevision && (
+                                <button onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
+                                  Descargar
+                                </button>
+                              )}
                             </div>
                           </td>
                           <td className="p-4">
                             <div className="flex flex-col items-start gap-2">
                               <span className={`px-3 py-1 rounded-full text-xs border ${circInfo.clase}`}>{circInfo.texto}</span>
+                              {vehiculo.urlCirculacion && (
+                                <button onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
+                                  Descargar
+                                </button>
+                              )}
                             </div>
                           </td>
                           <td className="p-4">
                             <div className="flex flex-col items-start gap-2">
                               <span className={`px-3 py-1 rounded-full text-xs border ${certInfo.clase}`}>{certInfo.texto}</span>
+                              {vehiculo.urlCertificado && (
+                                <button onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
+                                  Descargar
+                                </button>
+                              )}
                             </div>
                           </td>
                           <td className="p-4 flex gap-2 justify-center mt-2">
@@ -1064,60 +1105,6 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {pestanaActiva === 'estadisticas' && (
-          <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">Variacion de Kilometraje</h2>
-                <p className="text-sm text-slate-500 mt-1">Ultimos 15 dias de registro</p>
-              </div>
-              <div className="w-full sm:w-auto">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Vehiculo</label>
-                <select value={vehiculoEstadistica} onChange={(e) => setVehiculoEstadistica(e.target.value)} className="w-full sm:w-64 p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none font-bold text-slate-700">
-                  {vehiculosConReportes.length === 0 ? (<option value="">Sin registros</option>) : (vehiculosConReportes.map(v => (<option key={v} value={v}>{v}</option>)))}
-                </select>
-              </div>
-            </div>
-
-            {estadisticas.datos.length === 0 ? (
-              <div className="flex items-center justify-center h-64 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                <p className="text-slate-400 font-medium">Necesitas reportes en al menos 2 dias distintos para generar la grafica.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                <div className="lg:col-span-3 h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={estadisticas.datos} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis dataKey="fecha" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
-                      <YAxis tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val} km`} />
-                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variacion']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
-                      <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                      <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Dia" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="lg:col-span-1 flex flex-col gap-4">
-                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Periodo</p>
-                    <p className="text-3xl font-black text-slate-800">{estadisticas.kpis?.total.toLocaleString()} <span className="text-base font-medium text-slate-500">km</span></p>
-                  </div>
-                  <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
-                    <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Promedio Diario</p>
-                    <p className="text-3xl font-black text-blue-700">{estadisticas.kpis?.promedio.toLocaleString()} <span className="text-base font-medium text-blue-500">km</span></p>
-                  </div>
-                  <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
-                    <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-1">Pico Maximo</p>
-                    <p className="text-3xl font-black text-orange-700">{estadisticas.kpis?.maximo.kms.toLocaleString()} <span className="text-base font-medium text-orange-500">km</span></p>
-                    <p className="text-sm font-medium text-orange-600 mt-2">Registrado el {estadisticas.kpis?.maximo.fecha}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {pestanaActiva === 'usuarios' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
@@ -1245,7 +1232,6 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO AUDITORIA */}
         {pestanaActiva === 'auditoria' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100">
