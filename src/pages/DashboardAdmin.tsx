@@ -45,11 +45,11 @@ export default function DashboardAdmin() {
   
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
-  
   const [formUsuario, setFormUsuario] = useState({ 
     email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10 
   });
   const [creandoUsuario, setCreandoUsuario] = useState(false);
+
   const [historialAcciones, setHistorialAcciones] = useState<any[]>([]);
 
   const logAccion = async (accion: string, detalles: string) => {
@@ -62,7 +62,7 @@ export default function DashboardAdmin() {
         fecha: serverTimestamp()
       });
     } catch (e) {
-      console.error(e);
+      console.error("Error al guardar en el historial", e);
     }
   };
 
@@ -72,7 +72,7 @@ export default function DashboardAdmin() {
       const snap = await getDocs(q);
       setHistorialAcciones(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
-      console.error(error);
+      console.error("Error al cargar historial:", error);
     }
   };
 
@@ -84,6 +84,7 @@ export default function DashboardAdmin() {
 
   const cargarUsuarios = async () => {
     try {
+      // AQUÍ SE APLICA EL FILTRO PARA SEPARAR BASES DE DATOS
       const q = query(collection(db, 'usuarios'), where('proyecto', '==', 'gestion_flota'));
       const snap = await getDocs(q);
       const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -103,22 +104,23 @@ export default function DashboardAdmin() {
     setCreandoUsuario(true);
 
     try {
-      const datosUsuario: any = { rol: formUsuario.rol, proyecto: 'gestion_flota' };
-
-      if (formUsuario.rol === 'taller') {
-        datosUsuario.nombreTaller = formUsuario.nombreTaller;
-        datosUsuario.direccionTaller = formUsuario.direccionTaller;
-        datosUsuario.ciudadTaller = formUsuario.ciudadTaller;
-        datosUsuario.especialidadTaller = formUsuario.especialidadTaller;
-      } else if (formUsuario.rol === 'generador_qr') {
-        datosUsuario.limiteQR = Number(formUsuario.limiteQR);
-        if (!editandoUsuarioId) datosUsuario.qrsCreados = 0;
-      }
-
       if (editandoUsuarioId) {
-        await updateDoc(doc(db, 'usuarios', editandoUsuarioId), datosUsuario);
-        await logAccion('EDITAR_USUARIO', `Actualizado perfil: ${formUsuario.email}`);
-        alert("Usuario actualizado.");
+        await updateDoc(doc(db, 'usuarios', editandoUsuarioId), {
+          rol: formUsuario.rol,
+          ...(formUsuario.rol === 'taller' ? {
+            nombreTaller: formUsuario.nombreTaller,
+            direccionTaller: formUsuario.direccionTaller,
+            ciudadTaller: formUsuario.ciudadTaller,
+            especialidadTaller: formUsuario.especialidadTaller
+          } : formUsuario.rol === 'generador_qr' ? {
+            limiteQR: Number(formUsuario.limiteQR),
+            nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: ''
+          } : {
+            nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: '', limiteQR: 10
+          })
+        });
+        await logAccion('EDITAR_USUARIO', `Se actualizó el perfil de: ${formUsuario.email} (Rol: ${formUsuario.rol})`);
+        alert("Usuario actualizado correctamente.");
       } else {
         if (formUsuario.password.length < 6) {
           alert("La contraseña debe tener al menos 6 caracteres.");
@@ -131,11 +133,23 @@ export default function DashboardAdmin() {
         
         await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
           email: formUsuario.email,
-          ...datosUsuario,
+          rol: formUsuario.rol,
+          proyecto: 'gestion_flota', // SE AGREGA LA ETIQUETA DEL PROYECTO
+          ...(formUsuario.rol === 'taller' && {
+            nombreTaller: formUsuario.nombreTaller,
+            direccionTaller: formUsuario.direccionTaller,
+            ciudadTaller: formUsuario.ciudadTaller,
+            especialidadTaller: formUsuario.especialidadTaller
+          }),
+          ...(formUsuario.rol === 'generador_qr' && {
+            limiteQR: Number(formUsuario.limiteQR),
+            qrsCreados: 0
+          }),
           fechaCreacion: serverTimestamp()
         });
+
         await deleteApp(secondaryApp);
-        await logAccion('CREAR_USUARIO', `Usuario creado: ${formUsuario.email}`);
+        await logAccion('CREAR_USUARIO', `Se creó el usuario: ${formUsuario.email} (Rol: ${formUsuario.rol})`);
         alert("Usuario creado exitosamente.");
       }
       limpiarFormUsuario();
@@ -164,11 +178,11 @@ export default function DashboardAdmin() {
   };
 
   const eliminarUsuario = async (id: string, email: string) => {
-    const confirmar = window.confirm("¿Eliminar este usuario?");
+    const confirmar = window.confirm("¿Eliminar el perfil de este usuario de la base de datos?");
     if (!confirmar) return;
     try {
       await deleteDoc(doc(db, 'usuarios', id));
-      await logAccion('ELIMINAR_USUARIO', `Se eliminó el usuario: ${email}`);
+      await logAccion('ELIMINAR_USUARIO', `Se eliminó el usuario con correo: ${email}`);
       cargarUsuarios();
     } catch (error) {
       console.error(error);
@@ -197,22 +211,22 @@ export default function DashboardAdmin() {
   const actualizarEstadoCita = async (idCita: string, nuevoEstado: string, patente: string) => {
     try {
       await updateDoc(doc(db, 'citas_taller', idCita), { estado: nuevoEstado });
-      await logAccion('ACTUALIZAR_CITA', `Cita cambiada a '${nuevoEstado}' (Vehículo: ${patente})`);
+      await logAccion('ACTUALIZAR_CITA', `Se cambió a '${nuevoEstado}' la cita del vehículo: ${patente}`);
       cargarCitas();
     } catch (error) {
-      console.error(error);
+      console.error("Error actualizando cita:", error);
     }
   };
 
   const eliminarCita = async (idCita: string, patente: string) => {
-    const confirmar = window.confirm("¿Eliminar esta cita permanentemente?");
+    const confirmar = window.confirm("¿Seguro que deseas eliminar esta cita permanentemente?");
     if (!confirmar) return;
     try {
       await deleteDoc(doc(db, 'citas_taller', idCita));
-      await logAccion('ELIMINAR_CITA', `Se eliminó cita médica (Vehículo: ${patente})`);
+      await logAccion('ELIMINAR_CITA', `Se eliminó la cita médica del vehículo: ${patente}`);
       cargarCitas();
     } catch (error) {
-      console.error(error);
+      console.error("Error borrando cita:", error);
     }
   };
 
@@ -223,10 +237,11 @@ export default function DashboardAdmin() {
       if (!snap.empty) {
         setOtSeleccionada(snap.docs[0].data());
       } else {
-        alert("No se encontró la Orden de Trabajo.");
+        alert("No se encontró ninguna Orden de Trabajo asociada a esta cita.");
       }
     } catch (error) {
       console.error(error);
+      alert("Error al obtener la Orden de Trabajo.");
     }
   };
 
@@ -237,7 +252,9 @@ export default function DashboardAdmin() {
   }, [pestanaActiva, busqueda, filtroEstado, filtroTipoVehiculo]);
 
   useEffect(() => {
-    if (pestanaActiva === 'auditoria') cargarHistorial();
+    if (pestanaActiva === 'auditoria') {
+      cargarHistorial();
+    }
   }, [pestanaActiva]);
 
   useEffect(() => {
@@ -247,8 +264,10 @@ export default function DashboardAdmin() {
           const q = query(collection(db, 'reportes'), orderBy('fecha', 'asc'));
           const querySnapshot = await getDocs(q);
           const reportesData: any[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
           const limiteDias = new Date();
           limiteDias.setDate(limiteDias.getDate() - 15);
+          
           const reportesValidos = [];
 
           for (const rep of reportesData) {
@@ -257,11 +276,11 @@ export default function DashboardAdmin() {
                 try {
                   if (rep.fotoPath && typeof rep.fotoPath === 'string' && !rep.fotoEliminada) {
                     const fotoRef = ref(storage, rep.fotoPath);
-                    await deleteObject(fotoRef).catch(e => console.log(e));
+                    await deleteObject(fotoRef).catch(e => console.log("Foto ya no existe", e));
                   }
                   await deleteDoc(doc(db, 'reportes', rep.id));
                 } catch (e) {
-                  console.error(e);
+                  console.error("Error al borrar reporte antiguo:", e);
                 }
               } else {
                 if (rep.tipoVehiculo === 'Semi remolque') rep.tipoVehiculo = 'Semirremolque';
@@ -272,6 +291,7 @@ export default function DashboardAdmin() {
               reportesValidos.push(rep); 
             }
           }
+
           setReportes(reportesValidos.reverse());
         } catch (error) {
           console.error(error);
@@ -315,24 +335,27 @@ export default function DashboardAdmin() {
   }, [pestanaActiva]);
 
   const eliminarReporteIndividual = async (id: string, fotoPath: string | null, patente: string) => {
-    const confirmar = window.confirm("¿Eliminar este registro permanentemente?");
+    const confirmar = window.confirm("Estas seguro de que deseas eliminar este registro de forma permanente?");
     if (!confirmar) return;
+
     try {
       if (fotoPath) {
         const fotoRef = ref(storage, fotoPath);
-        await deleteObject(fotoRef).catch(e => console.log(e));
+        await deleteObject(fotoRef).catch(e => console.log("Error o foto ya borrada:", e));
       }
       await deleteDoc(doc(db, 'reportes', id));
-      await logAccion('ELIMINAR_REPORTE', `Se eliminó el reporte del vehículo: ${patente}`);
+      await logAccion('ELIMINAR_REPORTE', `Se eliminó el reporte diario del vehículo: ${patente}`);
       setReportes(prev => prev.filter(r => r.id !== id));
     } catch (error) {
       console.error(error);
+      alert("Hubo un error al eliminar el registro.");
     }
   };
 
   const eliminarTodosLosReportes = async () => {
-    const confirmar = window.confirm("ADVERTENCIA: ¿Eliminar TODOS los registros?");
+    const confirmar = window.confirm("ADVERTENCIA: Vas a eliminar TODOS los registros diarios almacenados en la base de datos. Esto no se puede deshacer. Continuar?");
     if (!confirmar) return;
+
     try {
       for (const rep of reportes) {
         if (rep.fotoPath && !rep.fotoEliminada) {
@@ -342,10 +365,11 @@ export default function DashboardAdmin() {
         await deleteDoc(doc(db, 'reportes', rep.id));
       }
       setReportes([]);
-      await logAccion('ELIMINAR_TODOS_REPORTES', `Se vació la base de datos de reportes`);
-      alert("Registros eliminados.");
+      await logAccion('ELIMINAR_TODOS_REPORTES', `Se vació completamente la base de datos de reportes`);
+      alert("Todos los registros han sido eliminados correctamente.");
     } catch (error) {
       console.error(error);
+      alert("Hubo un error durante la eliminacion masiva.");
     }
   };
 
@@ -361,12 +385,14 @@ export default function DashboardAdmin() {
         await uploadBytes(revRef, pdfRevision);
         urlRev = await getDownloadURL(revRef);
       }
+
       let urlCirc = formVehiculo.urlCirculacion;
       if (pdfCirculacion) {
         const circRef = ref(storage, `documentos/${patenteMayuscula}/circulacion.pdf`);
         await uploadBytes(circRef, pdfCirculacion);
         urlCirc = await getDownloadURL(circRef);
       }
+
       let urlCert = formVehiculo.urlCertificado;
       if (pdfCertificado) {
         const certRef = ref(storage, `documentos/${patenteMayuscula}/certificado.pdf`);
@@ -392,26 +418,34 @@ export default function DashboardAdmin() {
       if (!querySnapshot.empty) {
         const idVehiculoExistente = querySnapshot.docs[0].id;
         await updateDoc(doc(db, 'vehiculos', idVehiculoExistente), datosVehiculo);
-        await logAccion('ACTUALIZAR_VEHICULO', `Se actualizaron datos del vehículo: ${patenteMayuscula}`);
-        alert("Vehículo actualizado.");
+        await logAccion('ACTUALIZAR_VEHICULO', `Se actualizaron los datos/documentos del vehículo: ${patenteMayuscula}`);
+        alert("Datos y documentos actualizados correctamente.");
       } else {
         await addDoc(collection(db, 'vehiculos'), {
           ...datosVehiculo,
           patente: patenteMayuscula,
           fechaRegistro: serverTimestamp()
         });
-        await logAccion('REGISTRAR_VEHICULO', `Nuevo vehículo registrado: ${patenteMayuscula}`);
-        alert("Vehiculo registrado.");
+        await logAccion('REGISTRAR_VEHICULO', `Se ingresó un nuevo vehículo al sistema: ${patenteMayuscula}`);
+        alert("Vehiculo registrado correctamente.");
       }
 
       setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '' });
-      setPdfRevision(null); setPdfCirculacion(null); setPdfCertificado(null);
-      const fileRev = document.getElementById('file-rev') as HTMLInputElement; if (fileRev) fileRev.value = "";
-      const fileCirc = document.getElementById('file-circ') as HTMLInputElement; if (fileCirc) fileCirc.value = "";
-      const fileCert = document.getElementById('file-cert') as HTMLInputElement; if (fileCert) fileCert.value = "";
+      setPdfRevision(null);
+      setPdfCirculacion(null);
+      setPdfCertificado(null);
+      
+      const fileRev = document.getElementById('file-rev') as HTMLInputElement;
+      if (fileRev) fileRev.value = "";
+      const fileCirc = document.getElementById('file-circ') as HTMLInputElement;
+      if (fileCirc) fileCirc.value = "";
+      const fileCert = document.getElementById('file-cert') as HTMLInputElement;
+      if (fileCert) fileCert.value = "";
+
       cargarVehiculos();
     } catch (error) {
       console.error(error);
+      alert("Error al procesar el vehiculo");
     } finally {
       setGuardandoVehiculo(false);
     }
@@ -430,16 +464,18 @@ export default function DashboardAdmin() {
       urlCirculacion: vehiculo.urlCirculacion || '',
       urlCertificado: vehiculo.urlCertificado || ''
     });
-    setPdfRevision(null); setPdfCirculacion(null); setPdfCertificado(null);
+    setPdfRevision(null);
+    setPdfCirculacion(null);
+    setPdfCertificado(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const eliminarVehiculo = async (id: string, patente: string) => {
-    const confirmar = window.confirm("¿Eliminar este vehiculo?");
+    const confirmar = window.confirm("Estas seguro de que deseas eliminar este vehiculo del sistema?");
     if (confirmar) {
       try {
         await deleteDoc(doc(db, 'vehiculos', id));
-        await logAccion('ELIMINAR_VEHICULO', `Vehículo borrado: ${patente}`);
+        await logAccion('ELIMINAR_VEHICULO', `Se borró el vehículo de la base de datos: ${patente}`);
         setVehiculos(prev => prev.filter(v => v.id !== id));
       } catch (error) {
         console.error(error);
@@ -448,24 +484,27 @@ export default function DashboardAdmin() {
   };
 
   const eliminarQR = async (id: string) => {
-    const confirmar = window.confirm("¿Eliminar QR?");
+    const confirmar = window.confirm("Estas seguro de que deseas eliminar este QR guardado?");
     if (confirmar) {
       try {
         await deleteDoc(doc(db, 'qrs_guardados', id));
         setQrsGuardados(prev => prev.filter(qr => qr.id !== id));
       } catch (error) {
         console.error(error);
+        alert("Hubo un error al eliminar el QR.");
       }
     }
   };
 
   const sincronizarQRsAntiguos = async () => {
-    const confirmar = window.confirm("¿Sincronizar QRs antiguos?");
+    const confirmar = window.confirm("Quieres buscar QRs antiguos que no esten en tu lista de vehiculos y agregarlos automaticamente?");
     if (!confirmar) return;
+
     setSincronizando(true);
     try {
       const qrsSnap = await getDocs(collection(db, 'qrs_guardados'));
       const vehsSnap = await getDocs(collection(db, 'vehiculos'));
+      
       const patentesVehiculos = new Set(vehsSnap.docs.map(doc => doc.data().patente));
       let agregados = 0;
 
@@ -491,11 +530,12 @@ export default function DashboardAdmin() {
           agregados++;
         }
       }
+
       if (agregados > 0) {
-        alert(`Sincronizados ${agregados} vehiculos.`);
+        alert(`Sincronizacion exitosa. Se agregaron ${agregados} vehiculos nuevos desde los QRs.`);
         cargarVehiculos();
       } else {
-        alert("Todo al día.");
+        alert("Todo esta al dia. No hay QRs antiguos que falten en la lista de vehiculos.");
       }
     } catch (error) {
       console.error(error);
@@ -504,10 +544,14 @@ export default function DashboardAdmin() {
     }
   };
 
-  // RESTAURADA FUNCIÓN PARA FORZAR DESCARGA
   const forzarDescarga = async (url: string, nombreArchivo: string) => {
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
-    if (esIOS) { window.open(url, '_blank'); return; }
+
+    if (esIOS) {
+      window.open(url, '_blank');
+      return;
+    }
+
     try {
       const response = await fetch(url);
       const blob = await response.blob();
@@ -518,18 +562,26 @@ export default function DashboardAdmin() {
       a.download = nombreArchivo;
       document.body.appendChild(a);
       a.click();
-      setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(urlBlob); }, 100);
+      
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(urlBlob);
+      }, 100);
     } catch (error) {
+      console.error("Error al descargar, abriendo en nueva pestana:", error);
       window.open(url, '_blank');
     }
   };
 
   const calcularEstadoVencimiento = (fechaString: string) => {
     if (!fechaString) return { texto: 'No registrado', clase: 'text-slate-500 bg-slate-100 border-slate-200' };
+    
     const [year, month, day] = fechaString.split('-').map(Number);
     const fechaVencimiento = new Date(year, month - 1, day);
+    
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
+
     const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
     const diasRestantes = Math.round(diferenciaTiempo / (1000 * 3600 * 24));
 
@@ -545,20 +597,35 @@ export default function DashboardAdmin() {
     if (elemento) {
       try {
         await toPng(elemento, { cacheBust: true });
-        const imgData = await toPng(elemento, { quality: 1, pixelRatio: 3, backgroundColor: '#ffffff', cacheBust: true });
+
+        const imgData = await toPng(elemento, { 
+          quality: 1, 
+          pixelRatio: 3,
+          backgroundColor: '#ffffff',
+          cacheBust: true
+        });
+        
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
+        
         const nombreArchivo = `QR_${patente}.pdf`;
         const esCelular = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
         const pdfBlob = pdf.output('blob');
         const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
         if (esCelular && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-          try { await navigator.share({ files: [file] }); } catch (e) { pdf.save(nombreArchivo); }
+          try {
+            await navigator.share({ files: [file] });
+          } catch (e) {
+            pdf.save(nombreArchivo);
+          }
         } else {
           pdf.save(nombreArchivo);
         }
-      } catch (error) { console.error(error); }
+      } catch (error) {
+        console.error(error);
+      }
     }
     setGenerandoPdf(null);
   };
@@ -592,18 +659,26 @@ export default function DashboardAdmin() {
 
   const estadisticas = useMemo(() => {
     if (!vehiculoEstadistica) return { datos: [], kpis: null };
-    const reportesVehiculo = [...reportes].filter(r => r.vehiculoId === vehiculoEstadistica && r.kilometraje !== "No ingresado").sort((a, b) => {
+
+    const reportesVehiculo = [...reportes]
+      .filter(r => r.vehiculoId === vehiculoEstadistica && r.kilometraje !== "No ingresado")
+      .sort((a, b) => {
         const fechaA = a.fecha?.toMillis() || 0;
         const fechaB = b.fecha?.toMillis() || 0;
         return fechaA - fechaB;
       });
+
     if (reportesVehiculo.length < 2) return { datos: [], kpis: null };
+
     const registroPorDia: Record<string, { maxKm: number, timestamp: number }> = {};
+    
     reportesVehiculo.forEach(rep => {
       const fechaObj = rep.fecha?.toDate();
       if (!fechaObj) return;
+      
       const fechaStr = `${fechaObj.getDate()}/${fechaObj.getMonth() + 1}`;
       const kms = Number(rep.kilometraje);
+
       if (!isNaN(kms)) {
         if (!registroPorDia[fechaStr] || kms > registroPorDia[fechaStr].maxKm) {
           registroPorDia[fechaStr] = { maxKm: kms, timestamp: fechaObj.getTime() };
@@ -611,22 +686,48 @@ export default function DashboardAdmin() {
       }
     });
 
-    const diasOrdenados = Object.keys(registroPorDia).map(fecha => ({ fecha, maxKm: registroPorDia[fecha].maxKm, timestamp: registroPorDia[fecha].timestamp })).sort((a, b) => a.timestamp - b.timestamp);
+    const diasOrdenados = Object.keys(registroPorDia)
+      .map(fecha => ({
+        fecha,
+        maxKm: registroPorDia[fecha].maxKm,
+        timestamp: registroPorDia[fecha].timestamp
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
     const datos = [];
     let totalKms = 0;
     let maxDia = { fecha: '-', kms: 0 };
+
     for (let i = 1; i < diasOrdenados.length; i++) {
       let diferencia = diasOrdenados[i].maxKm - diasOrdenados[i - 1].maxKm;
       if (diferencia < 0) diferencia = 0; 
-      datos.push({ fecha: diasOrdenados[i].fecha, kmsRecorridos: diferencia, kilometrajeTotal: diasOrdenados[i].maxKm });
+
+      datos.push({
+        fecha: diasOrdenados[i].fecha,
+        kmsRecorridos: diferencia,
+        kilometrajeTotal: diasOrdenados[i].maxKm
+      });
     }
+
     const ultimos15 = datos.slice(-15);
+
     ultimos15.forEach(d => {
       totalKms += d.kmsRecorridos;
-      if (d.kmsRecorridos > maxDia.kms) maxDia = { fecha: d.fecha, kms: d.kmsRecorridos };
+      if (d.kmsRecorridos > maxDia.kms) {
+        maxDia = { fecha: d.fecha, kms: d.kmsRecorridos };
+      }
     });
+
     const promedio = ultimos15.length > 0 ? Math.round(totalKms / ultimos15.length) : 0;
-    return { datos: ultimos15, kpis: { total: totalKms, promedio: promedio, maximo: maxDia } };
+
+    return {
+      datos: ultimos15,
+      kpis: {
+        total: totalKms,
+        promedio: promedio,
+        maximo: maxDia
+      }
+    };
   }, [reportes, vehiculoEstadistica]);
 
   const vehiculosConReportes = Array.from(new Set(reportes.filter(r => r.vehiculoId).map(r => r.vehiculoId)));
@@ -640,17 +741,24 @@ export default function DashboardAdmin() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 z-10 relative overflow-hidden">
       <div className="max-w-6xl mx-auto">
+        
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-200 pb-6">
           <div><h1 className="text-3xl font-black text-slate-800">Panel de Control</h1></div>
+          
           <div className="w-full md:w-auto flex-1 max-w-2xl mx-auto md:mx-4 flex gap-2">
             <input type="text" placeholder="Buscar patente... Ej: AB12" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="w-full p-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none bg-white shadow-sm" />
-            <select value={filtroTipoVehiculo} onChange={(e) => setFiltroTipoVehiculo(e.target.value)} className="p-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none bg-white shadow-sm font-bold text-slate-600 min-w-[150px]">
+            <select 
+              value={filtroTipoVehiculo} 
+              onChange={(e) => setFiltroTipoVehiculo(e.target.value)} 
+              className="p-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none bg-white shadow-sm font-bold text-slate-600 min-w-[150px]"
+            >
               <option value="todos">Todos los Tipos</option>
               <option value="Tracto camión">Tracto camión</option>
               <option value="Semirremolque">Semirremolque</option>
               <option value="Camioneta">Camioneta</option>
             </select>
           </div>
+          
           <div className="flex gap-4 w-full md:w-auto">
             <Link to="/generador" className="flex-1 bg-white text-blue-600 border-2 border-blue-600 font-bold py-3 px-6 rounded-xl hover:bg-blue-50 transition-all text-center">Generar QR</Link>
             <button onClick={manejarCerrarSesion} className="flex-1 bg-slate-200 text-slate-700 font-bold py-3 px-6 rounded-xl hover:bg-slate-300 transition-all text-center">Salir</button>
@@ -667,6 +775,7 @@ export default function DashboardAdmin() {
           <button onClick={() => setPestanaActiva('auditoria')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'auditoria' ? 'bg-amber-500 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Auditoria</button>
         </div>
 
+        {/* CONTENIDO REPORTES */}
         {pestanaActiva === 'reportes' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -679,6 +788,7 @@ export default function DashboardAdmin() {
                 </div>
                 {reportes.length > 0 && (
                   <button onClick={eliminarTodosLosReportes} className="px-4 py-2 rounded-lg text-sm font-bold transition-all bg-red-600 text-white hover:bg-red-700 shadow-sm flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     Borrar Todos
                   </button>
                 )}
@@ -688,7 +798,12 @@ export default function DashboardAdmin() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-white text-slate-600 text-sm uppercase tracking-wider border-b border-slate-100">
-                    <th className="p-4 font-bold">Fecha</th><th className="p-4 font-bold">Patente</th><th className="p-4 font-bold">Kilometraje</th><th className="p-4 font-bold text-center">Estado</th><th className="p-4 font-bold text-center">Evidencia</th><th className="p-4 font-bold text-center">Acciones</th>
+                    <th className="p-4 font-bold">Fecha</th>
+                    <th className="p-4 font-bold">Patente</th>
+                    <th className="p-4 font-bold">Kilometraje</th>
+                    <th className="p-4 font-bold text-center">Estado</th>
+                    <th className="p-4 font-bold text-center">Evidencia</th>
+                    <th className="p-4 font-bold text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -704,7 +819,13 @@ export default function DashboardAdmin() {
                       <td className="p-4 text-slate-600 font-mono">{rep.kilometraje}</td>
                       <td className="p-4 text-center">{rep.fallaCritica ? <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200">BLOQUEADO</span> : <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200">APROBADO</span>}</td>
                       <td className="p-4 text-center">
-                        {rep.fotoUrl ? (<a href={rep.fotoUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-sm font-medium">Ver Foto</a>) : rep.fotoEliminada ? (<span className="text-slate-400 text-xs italic">Eliminada</span>) : (<span className="text-slate-400 text-sm">Sin foto</span>)}
+                        {rep.fotoUrl ? (
+                          <a href={rep.fotoUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-sm font-medium">Ver Foto</a>
+                        ) : rep.fotoEliminada ? (
+                          <span className="text-slate-400 text-xs italic">Eliminada</span>
+                        ) : (
+                          <span className="text-slate-400 text-sm">Sin foto</span>
+                        )}
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex justify-center gap-2">
@@ -716,15 +837,22 @@ export default function DashboardAdmin() {
                   ))}
                 </tbody>
               </table>
+              {reportesFiltrados.length > limiteReportes && (
+                <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+                  <button onClick={() => setLimiteReportes(prev => prev + 10)} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas registros</button>
+                </div>
+              )}
             </div>
           </div>
         )}
 
+        {/* VENTANA MODAL PARA DETALLES DEL CHECKLIST */}
         {reporteSeleccionado && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
               <h3 className="text-2xl font-black text-slate-800 mb-1 border-b border-slate-100 pb-4">Detalles del Checklist</h3>
               <p className="text-sm text-slate-500 mb-6 mt-2">Vehiculo: <span className="font-bold text-slate-800 text-lg">{reporteSeleccionado.vehiculoId}</span></p>
+              
               <div className="max-h-80 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                 {reporteSeleccionado.respuestas ? (
                   Object.entries(reporteSeleccionado.respuestas).map(([k, v]) => (
@@ -744,12 +872,18 @@ export default function DashboardAdmin() {
           </div>
         )}
 
+        {/* CONTENIDO VEHICULOS */}
         {pestanaActiva === 'vehiculos' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-slate-800">Anadir Vehiculo</h2>
-                <button type="button" onClick={sincronizarQRsAntiguos} disabled={sincronizando} className="text-xs font-bold bg-indigo-50 text-indigo-600 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200">
+                <button 
+                  type="button" 
+                  onClick={sincronizarQRsAntiguos} 
+                  disabled={sincronizando} 
+                  className="text-xs font-bold bg-indigo-50 text-indigo-600 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200"
+                >
                   {sincronizando ? 'Sincronizando...' : 'Sincronizar QRs'}
                 </button>
               </div>
@@ -799,7 +933,9 @@ export default function DashboardAdmin() {
                     {formVehiculo.urlRevision && !pdfRevision && (
                       <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
                         <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
+                        {/* BOTÓN DESCARGAR RESTAURADO */}
                         <button type="button" onClick={() => forzarDescarga(formVehiculo.urlRevision, `Revision_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                           Descargar
                         </button>
                       </div>
@@ -826,7 +962,9 @@ export default function DashboardAdmin() {
                     {formVehiculo.urlCirculacion && !pdfCirculacion && (
                       <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
                         <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
+                        {/* BOTÓN DESCARGAR RESTAURADO */}
                         <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCirculacion, `Circulacion_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                           Descargar
                         </button>
                       </div>
@@ -853,7 +991,9 @@ export default function DashboardAdmin() {
                     {formVehiculo.urlCertificado && !pdfCertificado && (
                       <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
                         <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
+                        {/* BOTÓN DESCARGAR RESTAURADO */}
                         <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCertificado, `Certificado_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                           Descargar
                         </button>
                       </div>
@@ -899,6 +1039,7 @@ export default function DashboardAdmin() {
                               <span className={`px-3 py-1 rounded-full text-xs border ${revInfo.clase}`}>{revInfo.texto}</span>
                               {vehiculo.urlRevision && (
                                 <button onClick={() => forzarDescarga(vehiculo.urlRevision, `Revision_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                   Descargar
                                 </button>
                               )}
@@ -909,6 +1050,7 @@ export default function DashboardAdmin() {
                               <span className={`px-3 py-1 rounded-full text-xs border ${circInfo.clase}`}>{circInfo.texto}</span>
                               {vehiculo.urlCirculacion && (
                                 <button onClick={() => forzarDescarga(vehiculo.urlCirculacion, `Circulacion_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                   Descargar
                                 </button>
                               )}
@@ -919,6 +1061,7 @@ export default function DashboardAdmin() {
                               <span className={`px-3 py-1 rounded-full text-xs border ${certInfo.clase}`}>{certInfo.texto}</span>
                               {vehiculo.urlCertificado && (
                                 <button onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                   Descargar
                                 </button>
                               )}
@@ -933,11 +1076,17 @@ export default function DashboardAdmin() {
                     })}
                   </tbody>
                 </table>
+                {vehiculosFiltrados.length > limiteVehiculos && (
+                  <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+                    <button onClick={() => setLimiteVehiculos(prev => prev + 10)} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas vehiculos</button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
+        {/* CONTENIDO QRS */}
         {pestanaActiva === 'qrs' && (
           <div>
             {qrsPaginados.length === 0 ? (
@@ -948,8 +1097,10 @@ export default function DashboardAdmin() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {qrsPaginados.map((qr) => {
                   const urlCorregida = qr.url?.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, 'https://gestion-flota-web.vercel.app') || '';
+
                   return (
                     <div key={qr.id} className="flex flex-col gap-2 relative">
+                      
                       <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
                         <img src={LOGO_BASE64} alt="Logo" className="h-12 object-contain mx-auto mb-4" />
                         <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
@@ -958,6 +1109,7 @@ export default function DashboardAdmin() {
                           <QRCodeSVG value={urlCorregida} size={130} level="H" includeMargin={false} />
                         </div>
                       </div>
+
                       <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
                         <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
@@ -969,21 +1121,30 @@ export default function DashboardAdmin() {
                           <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar el checklist.</p>
                         </div>
                       </div>
+
                       <div className="flex gap-2 w-full mt-2 relative z-10">
                         <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-sm">
                           {generandoPdf === qr.patente ? '...' : 'Descargar'}
                         </button>
                         <a href={urlCorregida} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-sm">Probar</a>
                       </div>
+                      
                       <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10 text-sm">Eliminar QR</button>
                     </div>
                   );
                 })}
               </div>
             )}
+            
+            {qrsFiltrados.length > limiteQRs && (
+              <div className="mt-8 text-center">
+                <button onClick={() => setLimiteQRs(prev => prev + 12)} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas QRs</button>
+              </div>
+            )}
           </div>
         )}
 
+        {/* CONTENIDO AGENDA TALLER */}
         {pestanaActiva === 'agenda' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100">
@@ -1015,13 +1176,23 @@ export default function DashboardAdmin() {
                         <td className="p-4">
                           <div className="text-sm font-bold text-slate-700">{cita.nombreTallerDestino || cita.tipoTaller || 'Taller Externo'}</div>
                           {cita.direccionCompletaTaller && (
-                            <a href={`https://www.google.com/maps/search/taller+${encodeURIComponent(cita.direccionCompletaTaller)}`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 font-bold hover:text-blue-700 hover:underline flex items-center gap-1 mt-1">
+                            <a 
+                              href={`https://www.google.com/maps/search/taller+${encodeURIComponent(cita.direccionCompletaTaller)}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-[10px] text-blue-500 font-bold hover:text-blue-700 hover:underline flex items-center gap-1 mt-1"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
                               Ubicar en Mapa
                             </a>
                           )}
                         </td>
                         <td className="p-4 text-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold border ${cita.estado === 'pendiente' ? 'bg-orange-100 text-orange-700 border-orange-200' : cita.estado === 'completada' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                            cita.estado === 'pendiente' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
+                            cita.estado === 'completada' ? 'bg-green-100 text-green-700 border-green-200' : 
+                            'bg-red-100 text-red-700 border-red-200'
+                          }`}>
                             {cita.estado.toUpperCase()}
                           </span>
                         </td>
@@ -1048,6 +1219,7 @@ export default function DashboardAdmin() {
           </div>
         )}
 
+        {/* VENTANA MODAL PARA VER ORDEN DE TRABAJO COMO ADMIN */}
         {otSeleccionada && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -1067,6 +1239,7 @@ export default function DashboardAdmin() {
                       if (!otSeleccionada.datos[item]) return null;
                       return (
                         <div key={item} className="text-xs bg-blue-50 text-blue-700 font-bold p-2 rounded-lg border border-blue-100 flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                           {item.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                         </div>
                       );
@@ -1076,6 +1249,10 @@ export default function DashboardAdmin() {
                     <p className="text-xs font-bold text-slate-500 uppercase mb-1">Descripción</p>
                     <p className="text-sm text-slate-700 whitespace-pre-wrap">{otSeleccionada.datos.descripcionTrabajo || 'Sin descripción'}</p>
                   </div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">Observaciones</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{otSeleccionada.datos.observaciones || 'Sin observaciones'}</p>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -1083,28 +1260,111 @@ export default function DashboardAdmin() {
                     <p className="text-sm font-bold text-slate-700">Taller/Técnico: <span className="font-normal">{otSeleccionada.datos.empresaTecnico}</span></p>
                     <p className="text-sm font-bold text-slate-700">Horas Parada: <span className="font-normal">{otSeleccionada.datos.horasParada}</span></p>
                   </div>
+                  
                   {otSeleccionada.datos.tareas && otSeleccionada.datos.tareas.length > 0 && (
                     <div>
                       <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Tareas Realizadas</h4>
                       <table className="w-full text-left border-collapse text-xs border border-slate-200">
                         <thead className="bg-slate-100 text-slate-600">
-                          <tr><th className="p-2 border border-slate-200">Descripción</th><th className="p-2 border border-slate-200 text-center">Horas</th></tr>
+                          <tr><th className="p-2 border border-slate-200">Descripción</th><th className="p-2 border border-slate-200 text-center">Horas</th><th className="p-2 border border-slate-200 text-center">Inicio</th><th className="p-2 border border-slate-200 text-center">Fin</th></tr>
                         </thead>
                         <tbody>
                           {otSeleccionada.datos.tareas.map((t: any, i: number) => (
-                            <tr key={i}><td className="p-2 border border-slate-200">{t.descripcion}</td><td className="p-2 border border-slate-200 text-center">{t.horas}</td></tr>
+                            <tr key={i}><td className="p-2 border border-slate-200">{t.descripcion}</td><td className="p-2 border border-slate-200 text-center">{t.horas}</td><td className="p-2 border border-slate-200 text-center">{t.fInicio}</td><td className="p-2 border border-slate-200 text-center">{t.fFin}</td></tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
                   )}
+
+                  {otSeleccionada.datos.repuestos && otSeleccionada.datos.repuestos.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Repuestos</h4>
+                      <table className="w-full text-left border-collapse text-xs border border-slate-200">
+                        <thead className="bg-slate-100 text-slate-600">
+                          <tr><th className="p-2 border border-slate-200 text-center">Cant.</th><th className="p-2 border border-slate-200 text-center">Unidad</th><th className="p-2 border border-slate-200">Descripción</th></tr>
+                        </thead>
+                        <tbody>
+                          {otSeleccionada.datos.repuestos.map((r: any, i: number) => (
+                            <tr key={i}><td className="p-2 border border-slate-200 text-center">{r.cant}</td><td className="p-2 border border-slate-200 text-center">{r.unidad}</td><td className="p-2 border border-slate-200">{r.descripcion}</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">Observaciones</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{otSeleccionada.datos.observaciones || 'Sin observaciones'}</p>
+                  </div>
                 </div>
               )}
+
               <button onClick={() => setOtSeleccionada(null)} className="mt-8 w-full bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition-colors shadow-lg">Cerrar</button>
             </div>
           </div>
         )}
 
+        {/* CONTENIDO ESTADISTICAS */}
+        {pestanaActiva === 'estadisticas' && (
+          <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Variacion de Kilometraje</h2>
+                <p className="text-sm text-slate-500 mt-1">Ultimos 15 dias de registro</p>
+              </div>
+              <div className="w-full sm:w-auto">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Vehiculo</label>
+                <select value={vehiculoEstadistica} onChange={(e) => setVehiculoEstadistica(e.target.value)} className="w-full sm:w-64 p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none font-bold text-slate-700">
+                  {vehiculosConReportes.length === 0 ? (<option value="">Sin registros</option>) : (vehiculosConReportes.map(v => (<option key={v} value={v}>{v}</option>)))}
+                </select>
+              </div>
+            </div>
+
+            {estadisticas.datos.length === 0 ? (
+              <div className="flex items-center justify-center h-64 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                <p className="text-slate-400 font-medium">Necesitas reportes en al menos 2 dias distintos para generar la grafica.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                
+                <div className="lg:col-span-3 h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={estadisticas.datos} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="fecha" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
+                      <YAxis tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val} km`} />
+                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variacion']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
+                      <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                      <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Dia" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="lg:col-span-1 flex flex-col gap-4">
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Periodo</p>
+                    <p className="text-3xl font-black text-slate-800">{estadisticas.kpis?.total.toLocaleString()} <span className="text-base font-medium text-slate-500">km</span></p>
+                  </div>
+                  
+                  <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
+                    <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Promedio Diario</p>
+                    <p className="text-3xl font-black text-blue-700">{estadisticas.kpis?.promedio.toLocaleString()} <span className="text-base font-medium text-blue-500">km</span></p>
+                  </div>
+                  
+                  <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
+                    <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-1">Pico Maximo</p>
+                    <p className="text-3xl font-black text-orange-700">{estadisticas.kpis?.maximo.kms.toLocaleString()} <span className="text-base font-medium text-orange-500">km</span></p>
+                    <p className="text-sm font-medium text-orange-600 mt-2">Registrado el {estadisticas.kpis?.maximo.fecha}</p>
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CONTENIDO USUARIOS */}
         {pestanaActiva === 'usuarios' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
@@ -1163,7 +1423,9 @@ export default function DashboardAdmin() {
                         <option value={20}>Plan Avanzado (20 QRs máximo)</option>
                         <option value={50}>Plan Corporativo (50 QRs máximo)</option>
                       </select>
-                      {editandoUsuarioId && <p className="text-xs text-purple-600 mt-2 italic">* Al actualizar el plan no se reiniciará la cantidad de QRs ya creados.</p>}
+                      {editandoUsuarioId && (
+                        <p className="text-xs text-purple-600 mt-2 italic">* Al actualizar el plan no se reiniciará la cantidad de QRs ya creados por el usuario.</p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1232,11 +1494,12 @@ export default function DashboardAdmin() {
           </div>
         )}
 
+        {/* CONTENIDO AUDITORIA (NUEVA PESTAÑA HISTORIAL INBORRABLE) */}
         {pestanaActiva === 'auditoria' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100">
               <h2 className="text-xl font-bold text-slate-800">Historial de Auditoría</h2>
-              <p className="text-sm text-slate-500 mt-1">Registro inmutable de todas las acciones importantes.</p>
+              <p className="text-sm text-slate-500 mt-1">Registro inmutable de todas las acciones importantes realizadas en la plataforma.</p>
             </div>
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-left border-collapse">
