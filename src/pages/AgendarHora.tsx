@@ -5,6 +5,8 @@ import { db } from '../lib/firebase';
 
 const HORAS_DISPONIBLES = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
 
+const ETIQUETA_PROYECTO = 'flota_app'; 
+
 export default function AgendarHora() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -27,7 +29,11 @@ export default function AgendarHora() {
       try {
         const q = query(collection(db, 'usuarios'), where('rol', '==', 'taller'));
         const snapshot = await getDocs(q);
-        const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const lista = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter((t: any) => t.proyecto === ETIQUETA_PROYECTO);
+
         setTalleres(lista);
         if (lista.length > 0) {
           setTallerSeleccionado(lista[0].id);
@@ -141,7 +147,6 @@ export default function AgendarHora() {
   };
 
   const tallerActual = talleres.find(t => t.id === tallerSeleccionado);
-  
   const direccionParaMapa = tallerActual ? (tallerActual.ciudadTaller ? `${tallerActual.direccionTaller}, ${tallerActual.ciudadTaller}` : tallerActual.ubicacionTaller || tallerActual.direccionTaller) : '';
 
   return (
@@ -275,7 +280,7 @@ export default function AgendarHora() {
             Usa esta opción solo si necesitas un taller por emergencia y no puedes esperar la coordinación.
           </p>
           <a 
-            href={`https://www.google.com/maps/search/?api=1&query=${categoriaTaller}+cerca+de+mi`} 
+            href={`https://www.google.com/maps/search/taller+${categoriaTaller}+cerca+de+mi`} 
             target="_blank" 
             rel="noopener noreferrer"
             className="w-full flex items-center justify-center gap-2 bg-white border-2 border-indigo-200 hover:bg-indigo-50 text-indigo-600 font-bold py-3 px-4 rounded-xl transition-colors text-sm shadow-sm"

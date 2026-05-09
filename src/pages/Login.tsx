@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { LOGO_BASE64 } from '../constants';
+
+const ETIQUETA_PROYECTO = 'flota_app'; 
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -26,7 +28,16 @@ export default function Login() {
         const userDocSnap = await getDoc(userDocRef);
 
         if (userDocSnap.exists()) {
-          const rol = userDocSnap.data().rol;
+          const data = userDocSnap.data();
+          
+          if (data.proyecto && data.proyecto !== ETIQUETA_PROYECTO) {
+            await signOut(auth);
+            setError('Acceso denegado: Esta cuenta pertenece a otra plataforma.');
+            setCargando(false);
+            return;
+          }
+
+          const rol = data.rol;
           if (rol === 'taller') {
             navigate('/taller');
           } else if (rol === 'generador_qr') {
@@ -35,7 +46,8 @@ export default function Login() {
             navigate('/admin');
           }
         } else {
-          navigate('/admin');
+          await signOut(auth);
+          setError('Tu perfil no existe o fue eliminado. Contacta al administrador.');
         }
       } catch (firestoreErr) {
         console.error(firestoreErr);

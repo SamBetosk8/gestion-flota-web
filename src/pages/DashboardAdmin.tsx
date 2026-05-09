@@ -45,6 +45,7 @@ export default function DashboardAdmin() {
   
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
+  
   const [formUsuario, setFormUsuario] = useState({ 
     email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10,
     razonSocial: '', telefono: '', direccion: ''
@@ -85,8 +86,8 @@ export default function DashboardAdmin() {
 
   const cargarUsuarios = async () => {
     try {
-      // AQUÍ SE APLICA EL FILTRO PARA SEPARAR BASES DE DATOS
-      const q = query(collection(db, 'usuarios'), where('proyecto', '==', 'gestion_flota'));
+      // AQUÍ USAMOS flota_app
+      const q = query(collection(db, 'usuarios'), where('proyecto', '==', 'flota_app'));
       const snap = await getDocs(q);
       const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setUsuariosRegistrados(users);
@@ -107,7 +108,7 @@ export default function DashboardAdmin() {
     try {
       const datosUsuario: any = { 
         rol: formUsuario.rol, 
-        proyecto: 'gestion_flota',
+        proyecto: 'flota_app',
         razonSocial: formUsuario.razonSocial,
         telefono: formUsuario.telefono,
         direccion: formUsuario.direccion
@@ -656,7 +657,7 @@ export default function DashboardAdmin() {
   const vehiculosPaginados = vehiculosFiltrados.slice(0, limiteVehiculos);
   const qrsPaginados = qrsFiltrados.slice(0, limiteQRs);
 
-  // AGRUPAMOS ESTRICTAMENTE LOS ELEMENTOS PAGINADOS PARA QUE VERCEL NO FALLE
+  // AGRUPAMOS LOS CÓDIGOS QR PAGINADOS
   const qrsAgrupadosPorUsuario = qrsPaginados.reduce((acc: any, qr: any) => {
     const grupo = qr.creadoPorNombre || 'Administrador General';
     if (!acc[grupo]) {
