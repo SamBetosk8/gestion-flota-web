@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, query, orderBy, getDocs, deleteDoc, doc, where, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, query, deleteDoc, doc, where, addDoc, serverTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { toPng } from 'html-to-image';
@@ -10,34 +10,43 @@ import { LOGO_BASE64 } from '../constants';
 
 export default function DashboardGenerador() {
   const navigate = useNavigate();
-  const [patente, setPatente] = useState('HBL123');
+  const [patente, setPatente] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState('Camioneta');
   const [procesando, setProcesando] = useState(false);
+  
   const [misQRs, setMisQRs] = useState<any[]>([]);
   const [perfil, setPerfil] = useState<any>(null);
 
   const urlVehiculo = `https://gestion-flota-web.vercel.app/v/${patente.toUpperCase()}`;
 
-  const cargarDatos = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const docRef = await getDoc(doc(db, 'usuarios', user.uid));
-      if (docRef.exists()) {
-        setPerfil({ id: user.uid, ...docRef.data() });
-      }
-
-      const q = query(collection(db, 'qrs_guardados'), where('creadoPor', '==', user.uid), orderBy('fechaRegistro', 'desc'));
-      const snap = await getDocs(q);
-      setMisQRs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
   useEffect(() => {
-    cargarDatos();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // 1. Escuchar el perfil en tiempo real
+    const unsubscribePerfil = onSnapshot(doc(db, 'usuarios', user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setPerfil({ id: user.uid, ...docSnap.data() });
+      }
+    });
+
+    // 2. Escuchar los QRs creados por este usuario en tiempo real
+    const q = query(collection(db, 'qrs_guardados'), where('creadoPor', '==', user.uid));
+    const unsubscribeQRs = onSnapshot(q, (snap) => {
+      const qrs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Ordenamos en local para no requerir un índice compuesto en Firebase
+      qrs.sort((a: any, b: any) => {
+        const timeA = a.fechaRegistro?.toMillis ? a.fechaRegistro.toMillis() : 0;
+        const timeB = b.fechaRegistro?.toMillis ? b.fechaRegistro.toMillis() : 0;
+        return timeB - timeA;
+      });
+      setMisQRs(qrs);
+    });
+
+    return () => {
+      unsubscribePerfil();
+      unsubscribeQRs();
+    };
   }, []);
 
   const manejarCerrarSesion = async () => {
@@ -45,34 +54,46 @@ export default function DashboardGenerador() {
     navigate('/login');
   };
 
-  const limiteAlcanzado = perfil && misQRs.length >= (perfil.limiteQR || 1);
+  const limitePermitido = perfil?.limiteQR || 1;
+  const limiteAlcanzado = misQRs.length >= limitePermitido;
 
   const guardarYDescargar = async () => {
-    if (!patente) return;
+    if (!patente) {
+      alert("Por favor ingresa una patente o identificador.");
+      return;
+    }
     
     if (limiteAlcanzado) {
-      alert(`Has alcanzado tu límite de ${perfil.limiteQR} QRs. Borra uno antiguo o contacta a soporte.`);
+      alert(`Has alcanzado tu límite de ${limitePermitido} QRs de tu plan actual. Borra un código antiguo o contacta a administración.`);
       return;
     }
 
     setProcesando(true);
     
     try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("No hay sesión activa");
+
       const patenteMayuscula = patente.toUpperCase();
+      
       const qQR = query(collection(db, 'qrs_guardados'), where('patente', '==', patenteMayuscula));
       const qrSnapshot = await getDocs(qQR);
 
-      if (qrSnapshot.empty) {
-        await addDoc(collection(db, 'qrs_guardados'), {
-          patente: patenteMayuscula,
-          tipo: tipoVehiculo,
-          url: urlVehiculo,
-          creadoPor: perfil?.id,
-          creadoPorNombre: perfil?.razonSocial || perfil?.email,
-          creadoPorDetalles: `Tel: ${perfil?.telefono || 'N/A'} - Dir: ${perfil?.direccion || 'N/A'}`,
-          fechaRegistro: serverTimestamp()
-        });
+      if (!qrSnapshot.empty) {
+        alert("Esta patente ya tiene un QR generado en el sistema.");
+        setProcesando(false);
+        return;
       }
+
+      await addDoc(collection(db, 'qrs_guardados'), {
+        patente: patenteMayuscula,
+        tipo: tipoVehiculo,
+        url: urlVehiculo,
+        creadoPor: user.uid,
+        creadoPorNombre: perfil?.razonSocial || perfil?.email || 'Generador',
+        creadoPorDetalles: `Tel: ${perfil?.telefono || 'N/A'} - Dir: ${perfil?.direccion || 'N/A'}`,
+        fechaRegistro: serverTimestamp()
+      });
 
       const qVehiculo = query(collection(db, 'vehiculos'), where('patente', '==', patenteMayuscula));
       const vehiculoSnapshot = await getDocs(qVehiculo);
@@ -107,7 +128,6 @@ export default function DashboardGenerador() {
         }
       }
 
-      cargarDatos();
       setPatente('');
     } catch (error) {
       console.error(error);
@@ -118,11 +138,11 @@ export default function DashboardGenerador() {
   };
 
   const eliminarQR = async (id: string) => {
-    const confirmar = window.confirm("¿Seguro que deseas eliminar este QR? Esto liberará espacio en tu plan.");
+    const confirmar = window.confirm("¿Seguro que deseas eliminar este QR? Esto liberará 1 espacio en tu plan inmediatamente.");
     if (confirmar) {
       try {
         await deleteDoc(doc(db, 'qrs_guardados', id));
-        cargarDatos();
+        // No necesitamos hacer setMisQRs porque el onSnapshot lo hará automáticamente
       } catch (error) {
         console.error(error);
       }
@@ -145,13 +165,14 @@ export default function DashboardGenerador() {
           console.error(error);
         }
       }
+      setPatente('');
     }, 500);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 z-10 relative overflow-hidden">
       
-      {/* Componente Oculto para Generar PDF */}
+      {/* Elemento Oculto para Generar PDF */}
       <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px' }}>
           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
@@ -173,7 +194,7 @@ export default function DashboardGenerador() {
           
           <div className="flex items-center gap-4">
             <div className="bg-purple-100 text-purple-800 px-4 py-2 rounded-xl font-bold border border-purple-200">
-              QRs Usados: {misQRs.length} / {perfil?.limiteQR || 1}
+              QRs Usados: {misQRs.length} / {limitePermitido}
             </div>
             <button onClick={manejarCerrarSesion} className="bg-slate-200 text-slate-700 font-bold py-2 px-6 rounded-xl hover:bg-slate-300 transition-all text-center">Salir</button>
           </div>
@@ -181,7 +202,6 @@ export default function DashboardGenerador() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* CREADOR DE QR */}
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-100 h-fit">
               <h2 className="text-xl font-black text-slate-800 mb-6">Nuevo Código QR</h2>
@@ -217,12 +237,11 @@ export default function DashboardGenerador() {
             </div>
           </div>
 
-          {/* LISTA DE MIS QRS */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
               <div className="p-6 bg-slate-50 border-b border-slate-100">
                 <h2 className="text-xl font-bold text-slate-800">Mis Códigos Activos</h2>
-                <p className="text-sm text-slate-500 mt-1">Si borras un código, recuperarás espacio en tu plan.</p>
+                <p className="text-sm text-slate-500 mt-1">Si borras un código, recuperarás espacio en tu plan automáticamente.</p>
               </div>
 
               <div className="p-6">
