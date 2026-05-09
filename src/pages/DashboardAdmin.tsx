@@ -45,8 +45,6 @@ export default function DashboardAdmin() {
   
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
-  
-  // Incluye los campos adicionales para el rol generador_qr
   const [formUsuario, setFormUsuario] = useState({ 
     email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10,
     razonSocial: '', telefono: '', direccion: ''
@@ -87,7 +85,6 @@ export default function DashboardAdmin() {
 
   const cargarUsuarios = async () => {
     try {
-      // AQUÍ SE APLICA EL FILTRO PARA SEPARAR BASES DE DATOS
       const q = query(collection(db, 'usuarios'), where('proyecto', '==', 'gestion_flota'));
       const snap = await getDocs(q);
       const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -654,8 +651,12 @@ export default function DashboardAdmin() {
     return coincidePatente && coincideTipo;
   });
 
-  // Agrupación de Códigos QR por cliente
-  const qrsAgrupadosPorUsuario = qrsFiltrados.reduce((acc: any, qr: any) => {
+  const reportesPaginados = reportesFiltrados.slice(0, limiteReportes);
+  const vehiculosPaginados = vehiculosFiltrados.slice(0, limiteVehiculos);
+  const qrsPaginados = qrsFiltrados.slice(0, limiteQRs);
+
+  // NUEVA LÓGICA DE AGRUPACIÓN (Usa qrsPaginados para evitar el error de Vercel y permitir Mostrar Más)
+  const qrsAgrupadosPorUsuario = qrsPaginados.reduce((acc: any, qr: any) => {
     const grupo = qr.creadoPorNombre || 'Administrador General';
     if (!acc[grupo]) {
       acc[grupo] = { detalles: qr.creadoPorDetalles || 'Generado desde el Panel Admin', qrs: [] };
@@ -664,11 +665,6 @@ export default function DashboardAdmin() {
     return acc;
   }, {});
 
-  const reportesPaginados = reportesFiltrados.slice(0, limiteReportes);
-  const vehiculosPaginados = vehiculosFiltrados.slice(0, limiteVehiculos);
-  const qrsPaginados = qrsFiltrados.slice(0, limiteQRs);
-
-  // RESTAURADA ESTADÍSTICAS LÓGICA Y GRÁFICOS
   const estadisticas = useMemo(() => {
     if (!vehiculoEstadistica) return { datos: [], kpis: null };
 
@@ -1153,6 +1149,13 @@ export default function DashboardAdmin() {
                 </div>
               ))
             )}
+            
+            {/* Restaurado el botón de mostrar más QRs */}
+            {qrsFiltrados.length > limiteQRs && (
+              <div className="mt-8 text-center">
+                <button onClick={() => setLimiteQRs(prev => prev + 12)} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas QRs</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1519,7 +1522,7 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO AUDITORIA (NUEVA PESTAÑA HISTORIAL INBORRABLE) */}
+        {/* CONTENIDO AUDITORIA (HISTORIAL INBORRABLE) */}
         {pestanaActiva === 'auditoria' && (
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
             <div className="p-6 bg-slate-50 border-b border-slate-100">
