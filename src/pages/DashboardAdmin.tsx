@@ -45,8 +45,6 @@ export default function DashboardAdmin() {
   
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
-  
-  // SE AGREGARON LOS CAMPOS DE RAZON SOCIAL, TELEFONO Y DIRECCION
   const [formUsuario, setFormUsuario] = useState({ 
     email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10,
     razonSocial: '', telefono: '', direccion: ''
@@ -87,6 +85,7 @@ export default function DashboardAdmin() {
 
   const cargarUsuarios = async () => {
     try {
+      // AQUÍ SE APLICA EL FILTRO PARA SEPARAR BASES DE DATOS
       const q = query(collection(db, 'usuarios'), where('proyecto', '==', 'gestion_flota'));
       const snap = await getDocs(q);
       const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -109,7 +108,9 @@ export default function DashboardAdmin() {
       const datosUsuario: any = { 
         rol: formUsuario.rol, 
         proyecto: 'gestion_flota',
-        telefono: formUsuario.telefono // Teléfono compartido entre roles
+        razonSocial: formUsuario.razonSocial,
+        telefono: formUsuario.telefono,
+        direccion: formUsuario.direccion
       };
 
       if (formUsuario.rol === 'taller') {
@@ -119,8 +120,6 @@ export default function DashboardAdmin() {
         datosUsuario.especialidadTaller = formUsuario.especialidadTaller;
       } else if (formUsuario.rol === 'generador_qr') {
         datosUsuario.limiteQR = Number(formUsuario.limiteQR);
-        datosUsuario.razonSocial = formUsuario.razonSocial;
-        datosUsuario.direccion = formUsuario.direccion;
       }
 
       if (editandoUsuarioId) {
@@ -140,6 +139,7 @@ export default function DashboardAdmin() {
         await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
           email: formUsuario.email,
           ...datosUsuario,
+          ...(formUsuario.rol === 'generador_qr' && { qrsCreados: 0 }),
           fechaCreacion: serverTimestamp()
         });
 
@@ -654,7 +654,7 @@ export default function DashboardAdmin() {
 
   const reportesPaginados = reportesFiltrados.slice(0, limiteReportes);
   const vehiculosPaginados = vehiculosFiltrados.slice(0, limiteVehiculos);
-  const qrsPaginados = qrsFiltrados.slice(0, limiteQRs); // AHORA SÍ LO USAMOS PARA AGRUPAR
+  const qrsPaginados = qrsFiltrados.slice(0, limiteQRs);
 
   // AGRUPAMOS ESTRICTAMENTE LOS ELEMENTOS PAGINADOS PARA QUE VERCEL NO FALLE
   const qrsAgrupadosPorUsuario = qrsPaginados.reduce((acc: any, qr: any) => {
@@ -1192,7 +1192,7 @@ export default function DashboardAdmin() {
                           <div className="text-sm font-bold text-slate-700">{cita.nombreTallerDestino || cita.tipoTaller || 'Taller Externo'}</div>
                           {cita.direccionCompletaTaller && (
                             <a 
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cita.direccionCompletaTaller)}`} 
+                              href={`https://www.google.com/maps/search/taller+${encodeURIComponent(cita.direccionCompletaTaller)}`} 
                               target="_blank" 
                               rel="noopener noreferrer" 
                               className="text-[10px] text-blue-500 font-bold hover:text-blue-700 hover:underline flex items-center gap-1 mt-1"
@@ -1320,6 +1320,65 @@ export default function DashboardAdmin() {
           </div>
         )}
 
+        {/* CONTENIDO ESTADISTICAS */}
+        {pestanaActiva === 'estadisticas' && (
+          <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Variacion de Kilometraje</h2>
+                <p className="text-sm text-slate-500 mt-1">Ultimos 15 dias de registro</p>
+              </div>
+              <div className="w-full sm:w-auto">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Vehiculo</label>
+                <select value={vehiculoEstadistica} onChange={(e) => setVehiculoEstadistica(e.target.value)} className="w-full sm:w-64 p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none font-bold text-slate-700">
+                  {vehiculosConReportes.length === 0 ? (<option value="">Sin registros</option>) : (vehiculosConReportes.map(v => (<option key={v} value={v}>{v}</option>)))}
+                </select>
+              </div>
+            </div>
+
+            {estadisticas.datos.length === 0 ? (
+              <div className="flex items-center justify-center h-64 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                <p className="text-slate-400 font-medium">Necesitas reportes en al menos 2 dias distintos para generar la grafica.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                
+                <div className="lg:col-span-3 h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={estadisticas.datos} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="fecha" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
+                      <YAxis tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val} km`} />
+                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`${value} km recorridos`, 'Variacion']} labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }} />
+                      <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                      <Line type="monotone" dataKey="kmsRecorridos" name="Kms Recorridos por Dia" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 8, fill: '#1d4ed8' }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="lg:col-span-1 flex flex-col gap-4">
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Periodo</p>
+                    <p className="text-3xl font-black text-slate-800">{estadisticas.kpis?.total.toLocaleString()} <span className="text-base font-medium text-slate-500">km</span></p>
+                  </div>
+                  
+                  <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
+                    <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Promedio Diario</p>
+                    <p className="text-3xl font-black text-blue-700">{estadisticas.kpis?.promedio.toLocaleString()} <span className="text-base font-medium text-blue-500">km</span></p>
+                  </div>
+                  
+                  <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
+                    <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-1">Pico Maximo</p>
+                    <p className="text-3xl font-black text-orange-700">{estadisticas.kpis?.maximo.kms.toLocaleString()} <span className="text-base font-medium text-orange-500">km</span></p>
+                    <p className="text-sm font-medium text-orange-600 mt-2">Registrado el {estadisticas.kpis?.maximo.fecha}</p>
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        )}
+
         {/* CONTENIDO USUARIOS */}
         {pestanaActiva === 'usuarios' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -1359,10 +1418,6 @@ export default function DashboardAdmin() {
                       <input type="text" required value={formUsuario.especialidadTaller} onChange={(e) => setFormUsuario({...formUsuario, especialidadTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Mecánica Integrada, Pintura" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-blue-800 mb-1">Teléfono</label>
-                      <input type="text" required value={formUsuario.telefono} onChange={(e) => setFormUsuario({...formUsuario, telefono: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: +569 1234 5678" />
-                    </div>
-                    <div>
                       <label className="block text-sm font-medium text-blue-800 mb-1">Dirección Exacta</label>
                       <input type="text" required value={formUsuario.direccionTaller} onChange={(e) => setFormUsuario({...formUsuario, direccionTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Vicuña Mackenna 2945" />
                     </div>
@@ -1395,7 +1450,9 @@ export default function DashboardAdmin() {
                         <option value={20}>Plan Avanzado (20 QRs máximo)</option>
                         <option value={50}>Plan Corporativo (50 QRs máximo)</option>
                       </select>
-                      {editandoUsuarioId && <p className="text-xs text-purple-600 mt-2 italic">* Al actualizar el plan no se reiniciará la cantidad de QRs ya creados.</p>}
+                      {editandoUsuarioId && (
+                        <p className="text-xs text-purple-600 mt-2 italic">* Al actualizar el plan no se reiniciará la cantidad de QRs ya creados por el usuario.</p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1439,7 +1496,7 @@ export default function DashboardAdmin() {
                           {user.rol === 'taller' ? (
                             <div className="text-sm">
                               <p className="font-black text-blue-700">{user.nombreTaller || 'Sin nombre'}</p>
-                              <p className="text-slate-500 font-medium text-xs">{user.especialidadTaller} - Tel: {user.telefono || 'N/A'}</p>
+                              <p className="text-slate-500 font-medium text-xs">{user.especialidadTaller}</p>
                               <p className="text-slate-500 text-xs">{user.ciudadTaller ? `${user.direccionTaller}, ${user.ciudadTaller}` : user.ubicacionTaller}</p>
                             </div>
                           ) : user.rol === 'generador_qr' ? (
