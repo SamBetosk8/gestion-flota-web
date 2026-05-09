@@ -30,7 +30,7 @@ export default function Login() {
           if (rol === 'taller') {
             navigate('/taller');
           } else if (rol === 'generador_qr') {
-            navigate('/generador');
+            navigate('/panel-generador');
           } else {
             navigate('/admin');
           }

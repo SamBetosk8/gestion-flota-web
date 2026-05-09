@@ -7,6 +7,7 @@ import VistaConductor from './pages/VistaConductor';
 import DashboardAdmin from './pages/DashboardAdmin';
 import DashboardTaller from './pages/DashboardTaller';
 import GeneradorQR from './pages/GeneradorQR';
+import DashboardGenerador from './pages/DashboardGenerador';
 import Login from './pages/Login';
 import AgendarHora from './pages/AgendarHora';
 
@@ -44,7 +45,7 @@ function RutaPrivada({ children, rolPermitido }: { children: React.ReactNode, ro
   
   if (rolPermitido && rolUsuario !== rolPermitido && rolUsuario !== 'admin') {
     if (rolUsuario === 'taller') return <Navigate to="/taller" />;
-    if (rolUsuario === 'generador_qr') return <Navigate to="/generador" />;
+    if (rolUsuario === 'generador_qr') return <Navigate to="/panel-generador" />;
     return <Navigate to="/admin" />;
   }
   
@@ -59,9 +60,15 @@ function App() {
         <Route path="/v/:id" element={<VistaConductor />} />
         <Route path="/agendar/:id" element={<AgendarHora />} />
         <Route path="/login" element={<Login />} />
+        
         <Route path="/admin" element={<RutaPrivada rolPermitido="admin"><DashboardAdmin /></RutaPrivada>} />
         <Route path="/taller" element={<RutaPrivada rolPermitido="taller"><DashboardTaller /></RutaPrivada>} />
-        <Route path="/generador" element={<RutaPrivada rolPermitido="generador_qr"><GeneradorQR /></RutaPrivada>} />
+        
+        {/* Ruta de Generador exclusiva para Admin */}
+        <Route path="/generador" element={<RutaPrivada rolPermitido="admin"><GeneradorQR /></RutaPrivada>} />
+        
+        {/* Panel exclusivo para el cliente generador de QRs */}
+        <Route path="/panel-generador" element={<RutaPrivada rolPermitido="generador_qr"><DashboardGenerador /></RutaPrivada>} />
       </Routes>
     </BrowserRouter>
   );

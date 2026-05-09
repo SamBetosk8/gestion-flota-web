@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
-import { db, auth } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { LOGO_BASE64 } from '../constants';
@@ -12,64 +11,26 @@ export default function GeneradorQR() {
   const [patente, setPatente] = useState('HBL123');
   const [tipoVehiculo, setTipoVehiculo] = useState('Camioneta');
   const [procesando, setProcesando] = useState(false);
-  const [rol, setRol] = useState('admin');
-  const navigate = useNavigate();
   
   const urlVehiculo = `https://gestion-flota-web.vercel.app/v/${patente.toUpperCase()}`;
-
-  useEffect(() => {
-    const fetchRol = async () => {
-      const user = auth.currentUser;
-      if (user) {
-        const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
-        if (userDoc.exists()) setRol(userDoc.data().rol);
-      }
-    };
-    fetchRol();
-  }, []);
-
-  const manejarCerrarSesion = async () => {
-    await signOut(auth);
-    navigate('/login');
-  };
 
   const guardarYDescargar = async () => {
     if (!patente) return;
     setProcesando(true);
     
     try {
-      const user = auth.currentUser;
-      let esGeneradorRestringido = false;
-      let userDocRef = null;
-
-      if (user) {
-        userDocRef = doc(db, 'usuarios', user.uid);
-        const userSnap = await getDoc(userDocRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          if (userData.rol === 'generador_qr') {
-            esGeneradorRestringido = true;
-            const limite = userData.limiteQR || 1;
-            const creados = userData.qrsCreados || 0;
-            
-            if (creados >= limite) {
-              alert(`Has alcanzado el límite de tu plan (${limite} QRs). Por favor, contacta a la administración para subir de plan.`);
-              setProcesando(false);
-              return;
-            }
-          }
-        }
-      }
-
       const patenteMayuscula = patente.toUpperCase();
       const qQR = query(collection(db, 'qrs_guardados'), where('patente', '==', patenteMayuscula));
       const qrSnapshot = await getDocs(qQR);
 
+      // Como administrador, guardamos a su nombre
       if (qrSnapshot.empty) {
         await addDoc(collection(db, 'qrs_guardados'), {
           patente: patenteMayuscula,
           tipo: tipoVehiculo,
           url: urlVehiculo,
+          creadoPor: 'admin',
+          creadoPorNombre: 'Administrador General',
           fechaRegistro: serverTimestamp()
         });
       }
@@ -86,10 +47,6 @@ export default function GeneradorQR() {
           vencimientoCertificado: '',
           fechaRegistro: serverTimestamp()
         });
-      }
-
-      if (esGeneradorRestringido && userDocRef) {
-        await updateDoc(userDocRef, { qrsCreados: increment(1) });
       }
 
       const elemento = document.getElementById('tarjeta-pdf-generador');
@@ -134,7 +91,7 @@ export default function GeneradorQR() {
       </div>
 
       <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full text-center border border-slate-100 z-10">
-        <h2 className="text-2xl font-black text-slate-800 mb-2">Generador QR</h2>
+        <h2 className="text-2xl font-black text-slate-800 mb-2">Generador QR (Admin)</h2>
         <p className="text-slate-500 mb-8 text-sm">Identificadores de Vehiculos</p>
         
         <div className="mb-6 text-left">
@@ -162,11 +119,7 @@ export default function GeneradorQR() {
             {procesando ? 'Procesando...' : 'Guardar y Descargar PDF'}
           </button>
           
-          {rol === 'admin' ? (
-            <Link to="/admin" className="block mt-2 text-slate-500 font-bold hover:text-slate-800 transition-colors">Volver al Panel Admin</Link>
-          ) : (
-            <button onClick={manejarCerrarSesion} className="block mt-2 text-red-500 font-bold hover:text-red-700 transition-colors w-full">Cerrar Sesión</button>
-          )}
+          <Link to="/admin" className="block mt-2 text-slate-500 font-bold hover:text-slate-800 transition-colors">Volver al Panel Admin</Link>
         </div>
       </div>
     </div>

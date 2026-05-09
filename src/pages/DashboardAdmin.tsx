@@ -45,8 +45,11 @@ export default function DashboardAdmin() {
   
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
+  
+  // Incluye los campos adicionales para el rol generador_qr
   const [formUsuario, setFormUsuario] = useState({ 
-    email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10 
+    email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10,
+    razonSocial: '', telefono: '', direccion: ''
   });
   const [creandoUsuario, setCreandoUsuario] = useState(false);
 
@@ -95,7 +98,7 @@ export default function DashboardAdmin() {
   };
 
   const limpiarFormUsuario = () => {
-    setFormUsuario({ email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10 });
+    setFormUsuario({ email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10, razonSocial: '', telefono: '', direccion: '' });
     setEditandoUsuarioId(null);
   };
 
@@ -104,21 +107,25 @@ export default function DashboardAdmin() {
     setCreandoUsuario(true);
 
     try {
+      const datosUsuario: any = { 
+        rol: formUsuario.rol, 
+        proyecto: 'gestion_flota',
+        razonSocial: formUsuario.razonSocial,
+        telefono: formUsuario.telefono,
+        direccion: formUsuario.direccion
+      };
+
+      if (formUsuario.rol === 'taller') {
+        datosUsuario.nombreTaller = formUsuario.nombreTaller;
+        datosUsuario.direccionTaller = formUsuario.direccionTaller;
+        datosUsuario.ciudadTaller = formUsuario.ciudadTaller;
+        datosUsuario.especialidadTaller = formUsuario.especialidadTaller;
+      } else if (formUsuario.rol === 'generador_qr') {
+        datosUsuario.limiteQR = Number(formUsuario.limiteQR);
+      }
+
       if (editandoUsuarioId) {
-        await updateDoc(doc(db, 'usuarios', editandoUsuarioId), {
-          rol: formUsuario.rol,
-          ...(formUsuario.rol === 'taller' ? {
-            nombreTaller: formUsuario.nombreTaller,
-            direccionTaller: formUsuario.direccionTaller,
-            ciudadTaller: formUsuario.ciudadTaller,
-            especialidadTaller: formUsuario.especialidadTaller
-          } : formUsuario.rol === 'generador_qr' ? {
-            limiteQR: Number(formUsuario.limiteQR),
-            nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: ''
-          } : {
-            nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: '', limiteQR: 10
-          })
-        });
+        await updateDoc(doc(db, 'usuarios', editandoUsuarioId), datosUsuario);
         await logAccion('EDITAR_USUARIO', `Se actualizó el perfil de: ${formUsuario.email} (Rol: ${formUsuario.rol})`);
         alert("Usuario actualizado correctamente.");
       } else {
@@ -133,18 +140,8 @@ export default function DashboardAdmin() {
         
         await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
           email: formUsuario.email,
-          rol: formUsuario.rol,
-          proyecto: 'gestion_flota', // SE AGREGA LA ETIQUETA DEL PROYECTO
-          ...(formUsuario.rol === 'taller' && {
-            nombreTaller: formUsuario.nombreTaller,
-            direccionTaller: formUsuario.direccionTaller,
-            ciudadTaller: formUsuario.ciudadTaller,
-            especialidadTaller: formUsuario.especialidadTaller
-          }),
-          ...(formUsuario.rol === 'generador_qr' && {
-            limiteQR: Number(formUsuario.limiteQR),
-            qrsCreados: 0
-          }),
+          ...datosUsuario,
+          ...(formUsuario.rol === 'generador_qr' && { qrsCreados: 0 }),
           fechaCreacion: serverTimestamp()
         });
 
@@ -163,15 +160,19 @@ export default function DashboardAdmin() {
   };
 
   const editarUsuario = (user: any) => {
+    const rolActual = user.rol === 'taller' ? 'taller' : user.rol === 'generador_qr' ? 'generador_qr' : 'admin';
     setFormUsuario({
       email: user.email,
       password: '',
-      rol: user.rol || 'admin',
+      rol: rolActual,
       nombreTaller: user.nombreTaller || '',
       direccionTaller: user.direccionTaller || user.ubicacionTaller || '',
       ciudadTaller: user.ciudadTaller || '',
       especialidadTaller: user.especialidadTaller || 'Mecánica Integrada',
-      limiteQR: user.limiteQR || 10
+      limiteQR: user.limiteQR || 10,
+      razonSocial: user.razonSocial || user.nombreTaller || '',
+      telefono: user.telefono || '',
+      direccion: user.direccion || user.direccionTaller || user.ubicacionTaller || ''
     });
     setEditandoUsuarioId(user.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -653,10 +654,21 @@ export default function DashboardAdmin() {
     return coincidePatente && coincideTipo;
   });
 
+  // Agrupación de Códigos QR por cliente
+  const qrsAgrupadosPorUsuario = qrsFiltrados.reduce((acc: any, qr: any) => {
+    const grupo = qr.creadoPorNombre || 'Administrador General';
+    if (!acc[grupo]) {
+      acc[grupo] = { detalles: qr.creadoPorDetalles || 'Generado desde el Panel Admin', qrs: [] };
+    }
+    acc[grupo].qrs.push(qr);
+    return acc;
+  }, {});
+
   const reportesPaginados = reportesFiltrados.slice(0, limiteReportes);
   const vehiculosPaginados = vehiculosFiltrados.slice(0, limiteVehiculos);
   const qrsPaginados = qrsFiltrados.slice(0, limiteQRs);
 
+  // RESTAURADA ESTADÍSTICAS LÓGICA Y GRÁFICOS
   const estadisticas = useMemo(() => {
     if (!vehiculoEstadistica) return { datos: [], kpis: null };
 
@@ -933,7 +945,6 @@ export default function DashboardAdmin() {
                     {formVehiculo.urlRevision && !pdfRevision && (
                       <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
                         <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
-                        {/* BOTÓN DESCARGAR RESTAURADO */}
                         <button type="button" onClick={() => forzarDescarga(formVehiculo.urlRevision, `Revision_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                           Descargar
@@ -962,7 +973,6 @@ export default function DashboardAdmin() {
                     {formVehiculo.urlCirculacion && !pdfCirculacion && (
                       <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
                         <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
-                        {/* BOTÓN DESCARGAR RESTAURADO */}
                         <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCirculacion, `Circulacion_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                           Descargar
@@ -991,7 +1001,6 @@ export default function DashboardAdmin() {
                     {formVehiculo.urlCertificado && !pdfCertificado && (
                       <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
                         <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
-                        {/* BOTÓN DESCARGAR RESTAURADO */}
                         <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCertificado, `Certificado_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                           Descargar
@@ -1086,60 +1095,63 @@ export default function DashboardAdmin() {
           </div>
         )}
 
-        {/* CONTENIDO QRS */}
+        {/* CONTENIDO QRS (AGRUPADOS POR USUARIO) */}
         {pestanaActiva === 'qrs' && (
-          <div>
-            {qrsPaginados.length === 0 ? (
+          <div className="space-y-12">
+            {Object.keys(qrsAgrupadosPorUsuario).length === 0 ? (
               <div className="bg-white p-12 rounded-3xl shadow-lg text-center border border-slate-100">
                 <p className="text-slate-500 text-lg">No se encontraron codigos QR guardados.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {qrsPaginados.map((qr) => {
-                  const urlCorregida = qr.url?.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, 'https://gestion-flota-web.vercel.app') || '';
-
-                  return (
-                    <div key={qr.id} className="flex flex-col gap-2 relative">
-                      
-                      <div className="bg-white p-6 rounded-3xl shadow-lg flex flex-col items-center border border-slate-100">
-                        <img src={LOGO_BASE64} alt="Logo" className="h-12 object-contain mx-auto mb-4" />
-                        <h3 className="text-3xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
-                        <p className="text-xs text-slate-500 font-bold uppercase mb-4">{qr.tipo || 'Control de Flota'}</p>
-                        <div className="bg-white p-2 rounded-xl border-4 border-slate-800 mb-4 shadow-sm">
-                          <QRCodeSVG value={urlCorregida} size={130} level="H" includeMargin={false} />
-                        </div>
-                      </div>
-
-                      <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
-                        <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
-                          <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
-                          <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
-                          <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">{qr.tipo || 'Control de Flota'}</p>
-                          <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
-                            <QRCodeSVG value={urlCorregida} size={220} level="H" includeMargin={false} />
-                          </div>
-                          <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar el checklist.</p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 w-full mt-2 relative z-10">
-                        <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-sm">
-                          {generandoPdf === qr.patente ? '...' : 'Descargar'}
-                        </button>
-                        <a href={urlCorregida} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-sm">Probar</a>
-                      </div>
-                      
-                      <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10 text-sm">Eliminar QR</button>
+              Object.entries(qrsAgrupadosPorUsuario).map(([grupo, dataGrupo]: any) => (
+                <div key={grupo} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                  <div className="border-b border-slate-100 pb-4 mb-6">
+                    <h2 className="text-xl font-black text-slate-800">{grupo}</h2>
+                    <p className="text-sm font-medium text-slate-500 mt-1">{dataGrupo.detalles}</p>
+                    <div className="inline-block bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 rounded-lg mt-2">
+                      Total Creados: {dataGrupo.qrs.length}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-            
-            {qrsFiltrados.length > limiteQRs && (
-              <div className="mt-8 text-center">
-                <button onClick={() => setLimiteQRs(prev => prev + 12)} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas QRs</button>
-              </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {dataGrupo.qrs.map((qr: any) => {
+                      const urlCorregida = qr.url?.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, 'https://gestion-flota-web.vercel.app') || '';
+                      return (
+                        <div key={qr.id} className="flex flex-col gap-2 relative bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                          <div className="flex flex-col items-center">
+                            <h3 className="text-2xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase mb-4">{qr.tipo || 'Control de Flota'}</p>
+                            <div className="bg-white p-2 rounded-xl border-2 border-slate-200 mb-4 shadow-sm">
+                              <QRCodeSVG value={urlCorregida} size={100} level="H" includeMargin={false} />
+                            </div>
+                          </div>
+
+                          <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
+                            <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
+                              <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
+                              <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
+                              <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">{qr.tipo || 'Control de Flota'}</p>
+                              <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
+                                <QRCodeSVG value={urlCorregida} size={220} level="H" includeMargin={false} />
+                              </div>
+                              <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar el checklist.</p>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 w-full mt-2 relative z-10">
+                            <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-xs">
+                              {generandoPdf === qr.patente ? '...' : 'Descargar'}
+                            </button>
+                            <a href={urlCorregida} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-xs flex items-center justify-center">Probar</a>
+                          </div>
+                          
+                          <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10 text-xs">Eliminar QR</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}
@@ -1416,6 +1428,18 @@ export default function DashboardAdmin() {
                 {formUsuario.rol === 'generador_qr' && (
                   <div className="space-y-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
                     <div>
+                      <label className="block text-sm font-medium text-purple-800 mb-1">Razón Social / Empresa</label>
+                      <input type="text" required value={formUsuario.razonSocial} onChange={(e) => setFormUsuario({...formUsuario, razonSocial: e.target.value})} className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white" placeholder="Ej: Transportes XYZ" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-purple-800 mb-1">Teléfono de Contacto</label>
+                      <input type="text" required value={formUsuario.telefono} onChange={(e) => setFormUsuario({...formUsuario, telefono: e.target.value})} className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white" placeholder="Ej: +569 1234 5678" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-purple-800 mb-1">Dirección / Sede</label>
+                      <input type="text" required value={formUsuario.direccion} onChange={(e) => setFormUsuario({...formUsuario, direccion: e.target.value})} className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white" placeholder="Ej: Parque Industrial, Sitio 4" />
+                    </div>
+                    <div>
                       <label className="block text-sm font-medium text-purple-800 mb-1">Plan contratado (Límite de QRs)</label>
                       <select value={formUsuario.limiteQR} onChange={(e) => setFormUsuario({...formUsuario, limiteQR: Number(e.target.value)})} className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
                         <option value={1}>Plan Básico (1 QR máximo)</option>
@@ -1474,8 +1498,9 @@ export default function DashboardAdmin() {
                             </div>
                           ) : user.rol === 'generador_qr' ? (
                             <div className="text-sm">
-                              <p className="font-black text-purple-700">Límite Contratado: {user.limiteQR} QRs</p>
-                              <p className="text-slate-500 font-medium text-xs">Utilizados: {user.qrsCreados || 0} QRs</p>
+                              <p className="font-black text-purple-700">{user.razonSocial || 'Empresa No Definida'}</p>
+                              <p className="text-slate-500 font-medium text-xs">Plan: {user.limiteQR} QRs | Dir: {user.direccion || 'N/A'}</p>
+                              <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400 italic">Acceso Total</span>
