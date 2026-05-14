@@ -656,7 +656,6 @@ export default function DashboardAdmin() {
   const vehiculosPaginados = vehiculosFiltrados.slice(0, limiteVehiculos);
   const qrsPaginados = qrsFiltrados.slice(0, limiteQRs); 
 
-  // ESTO SOLUCIONA EL ERROR DE TYPE SCRIPT: Usamos la variable qrsPaginados para crear los grupos en pantalla
   const qrsAgrupadosPorUsuario = qrsPaginados.reduce((acc: any, qr: any) => {
     const grupo = qr.creadoPorNombre || 'Administrador General';
     if (!acc[grupo]) {
