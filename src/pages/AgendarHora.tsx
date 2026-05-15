@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import fondoTaller from '../assets/taller.jpg'; // NUEVA IMAGEN DE FONDO
+import fondoTaller from '../assets/taller.jpg'; // IMAGEN DE FONDO
 
 const HORAS_DISPONIBLES = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
 
@@ -16,6 +16,9 @@ export default function AgendarHora() {
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  
+  // NUEVO ESTADO: Controla la pantalla final de éxito
+  const [reservaExitosa, setReservaExitosa] = useState(false);
 
   const [talleres, setTalleres] = useState<any[]>([]);
   const [tallerSeleccionado, setTallerSeleccionado] = useState('');
@@ -137,8 +140,8 @@ export default function AgendarHora() {
         esquemaPago: '80% Taller / 20% Ecopanta',
         fechaRegistro: serverTimestamp()
       });
-      alert('Solicitud enviada exitosamente.');
-      navigate(`/v/${id}`);
+      // AQUÍ OCURRE EL CAMBIO: Ya no navegamos hacia atrás, sino que mostramos la pantalla de éxito
+      setReservaExitosa(true);
     } catch (error) {
       console.error(error);
       alert('Hubo un error al enviar la solicitud.');
@@ -150,12 +153,39 @@ export default function AgendarHora() {
   const tallerActual = talleres.find(t => t.id === tallerSeleccionado);
   const direccionParaMapa = tallerActual ? (tallerActual.ciudadTaller ? `${tallerActual.direccionTaller}, ${tallerActual.ciudadTaller}` : tallerActual.ubicacionTaller || tallerActual.direccionTaller) : '';
 
+  // VISTA FINAL DE AGRADECIMIENTO (Si la reserva fue exitosa)
+  if (reservaExitosa) {
+    return (
+      <div 
+        className="min-h-screen flex items-center justify-center p-4 text-center relative"
+        style={{ backgroundImage: `url(${fondoTaller})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}
+      >
+        <div className="absolute inset-0 bg-slate-900/70 z-0"></div>
+        
+        <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-md relative z-10 animate-fade-in border-t-8 border-green-500 w-full">
+          <div className="mx-auto w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 shadow-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+          </div>
+          <h1 className="text-3xl font-black text-slate-800 mb-4">¡Hora Agendada con Éxito!</h1>
+          <p className="text-slate-500 text-base leading-relaxed mb-8 font-medium">
+            Tu solicitud de taller para el vehículo <span className="font-bold text-slate-700">{id}</span> ha sido enviada a la administración. ¡Muchas gracias por tu compromiso y que tengas un viaje muy seguro!
+          </p>
+          
+          {/* Al presionar este botón, se reinicia todo como si escaneara el QR de nuevo */}
+          <button onClick={() => window.location.href = `/v/${id}`} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
+            Volver a escanear QR
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // VISTA NORMAL DE AGENDAMIENTO
   return (
     <div 
       className="min-h-screen flex flex-col items-center p-4 md:p-6 relative"
       style={{ backgroundImage: `url(${fondoTaller})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}
     >
-      {/* Capa oscura superpuesta para leer bien */}
       <div className="absolute inset-0 bg-slate-900/60 z-0"></div>
 
       <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full relative z-10 my-auto animate-fade-in border border-slate-100">
@@ -298,9 +328,9 @@ export default function AgendarHora() {
         </div>
 
         <div className="mt-6 text-center border-t border-slate-100 pt-6">
-          <Link to={`/v/${id}`} className="text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 px-4 py-2 rounded-lg transition-colors">
+          <button onClick={() => navigate(`/v/${id}`)} className="text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 px-4 py-2 rounded-lg transition-colors">
             Cancelar y volver al resumen
-          </Link>
+          </button>
         </div>
 
       </div>
