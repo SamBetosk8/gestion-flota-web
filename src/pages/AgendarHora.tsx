@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import fondoTaller from '../assets/taller.jpg'; // IMAGEN DE FONDO
@@ -140,7 +140,6 @@ export default function AgendarHora() {
         esquemaPago: '80% Taller / 20% Ecopanta',
         fechaRegistro: serverTimestamp()
       });
-      // AQUÍ OCURRE EL CAMBIO: Ya no navegamos hacia atrás, sino que mostramos la pantalla de éxito
       setReservaExitosa(true);
     } catch (error) {
       console.error(error);
@@ -153,7 +152,6 @@ export default function AgendarHora() {
   const tallerActual = talleres.find(t => t.id === tallerSeleccionado);
   const direccionParaMapa = tallerActual ? (tallerActual.ciudadTaller ? `${tallerActual.direccionTaller}, ${tallerActual.ciudadTaller}` : tallerActual.ubicacionTaller || tallerActual.direccionTaller) : '';
 
-  // VISTA FINAL DE AGRADECIMIENTO (Si la reserva fue exitosa)
   if (reservaExitosa) {
     return (
       <div 
@@ -171,7 +169,6 @@ export default function AgendarHora() {
             Tu solicitud de taller para el vehículo <span className="font-bold text-slate-700">{id}</span> ha sido enviada a la administración. ¡Muchas gracias por tu compromiso y que tengas un viaje muy seguro!
           </p>
           
-          {/* Al presionar este botón, se reinicia todo como si escaneara el QR de nuevo */}
           <button onClick={() => window.location.href = `/v/${id}`} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
             Volver a escanear QR
           </button>
@@ -180,7 +177,6 @@ export default function AgendarHora() {
     );
   }
 
-  // VISTA NORMAL DE AGENDAMIENTO
   return (
     <div 
       className="min-h-screen flex flex-col items-center p-4 md:p-6 relative"
