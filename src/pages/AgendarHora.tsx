@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import fondoTaller from '../assets/taller.jpg'; // NUEVA IMAGEN DE FONDO
 
 const HORAS_DISPONIBLES = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
 
@@ -150,12 +151,18 @@ export default function AgendarHora() {
   const direccionParaMapa = tallerActual ? (tallerActual.ciudadTaller ? `${tallerActual.direccionTaller}, ${tallerActual.ciudadTaller}` : tallerActual.ubicacionTaller || tallerActual.direccionTaller) : '';
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center p-6">
-      <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-100">
+    <div 
+      className="min-h-screen flex flex-col items-center p-4 md:p-6 relative"
+      style={{ backgroundImage: `url(${fondoTaller})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}
+    >
+      {/* Capa oscura superpuesta para leer bien */}
+      <div className="absolute inset-0 bg-slate-900/60 z-0"></div>
+
+      <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full relative z-10 my-auto animate-fade-in border border-slate-100">
         
         <div className="text-center mb-6 border-b border-slate-100 pb-6">
           <h2 className="text-2xl font-black text-slate-800">Solicitar Taller</h2>
-          <p className="text-blue-600 font-mono text-xl mt-2 tracking-widest bg-blue-50 inline-block px-4 py-1 rounded-xl">{id}</p>
+          <p className="text-blue-600 font-mono text-xl mt-2 tracking-widest bg-blue-50 inline-block px-4 py-1 rounded-xl shadow-sm">{id}</p>
         </div>
 
         <div className="mb-8">
@@ -167,7 +174,7 @@ export default function AgendarHora() {
           </p>
 
           {fallaEspecifica && (
-            <div className="mb-4 bg-orange-50 p-3 rounded-xl border border-orange-100 animate-fade-in">
+            <div className="mb-4 bg-orange-50 p-3 rounded-xl border border-orange-100 animate-fade-in shadow-sm">
               <span className="text-xs font-bold text-orange-800">Problema Derivado: </span>
               <span className="text-sm font-black text-orange-600">{fallaEspecifica}</span>
             </div>
@@ -177,7 +184,7 @@ export default function AgendarHora() {
             <select 
               value={tallerSeleccionado} 
               onChange={(e) => setTallerSeleccionado(e.target.value)}
-              className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all mb-4"
+              className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all mb-4 shadow-sm"
             >
               {talleres.map(t => (
                 <option key={t.id} value={t.id}>{t.nombreTaller}</option>
@@ -225,7 +232,7 @@ export default function AgendarHora() {
             value={fecha} 
             onChange={(e) => setFecha(e.target.value)} 
             disabled={talleres.length === 0}
-            className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all mb-4" 
+            className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all mb-4 shadow-sm" 
           />
 
           {fecha && talleres.length > 0 && (
@@ -262,10 +269,10 @@ export default function AgendarHora() {
           <button 
             onClick={confirmarReserva} 
             disabled={!fecha || !horaSeleccionada || guardando || talleres.length === 0} 
-            className={`w-full font-bold py-4 rounded-xl transition-all shadow-md ${
+            className={`w-full font-black text-lg py-4 rounded-2xl transition-all shadow-xl ${
               !fecha || !horaSeleccionada || guardando || talleres.length === 0
                 ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                : 'bg-slate-800 text-white hover:bg-slate-900'
+                : 'bg-slate-800 text-white hover:bg-slate-900 hover:-translate-y-1'
             }`}
           >
             {guardando ? 'Enviando solicitud...' : 'Confirmar Solicitud'}
@@ -291,7 +298,7 @@ export default function AgendarHora() {
         </div>
 
         <div className="mt-6 text-center border-t border-slate-100 pt-6">
-          <Link to={`/v/${id}`} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors py-2">
+          <Link to={`/v/${id}`} className="text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 px-4 py-2 rounded-lg transition-colors">
             Cancelar y volver al resumen
           </Link>
         </div>

@@ -52,6 +52,8 @@ export default function VistaConductor() {
   const [bloqueado, setBloqueado] = useState(false);
   const [mostrarResumen, setMostrarResumen] = useState(false);
   
+  const [jornadaFinalizada, setJornadaFinalizada] = useState(false);
+  
   const [kilometrajeActual, setKilometrajeActual] = useState<number | null>(null);
   const [kilometrajeAnterior, setKilometrajeAnterior] = useState<number>(0);
   const [kilometraje, setKilometraje] = useState('');
@@ -251,10 +253,32 @@ export default function VistaConductor() {
     );
   };
 
+  // 1. VISTA DE DESPEDIDA FINAL CON MENSAJE LARGO
+  if (jornadaFinalizada) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 text-center">
+        <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-green-500 animate-fade-in">
+          <div className="mx-auto w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 shadow-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+          </div>
+          <h1 className="text-3xl font-black text-slate-800 mb-4">¡Muchas gracias por tu compromiso!</h1>
+          <p className="text-slate-500 text-base leading-relaxed mb-8 font-medium">
+            Tu reporte de checklist diario ha sido completado y guardado con éxito. Si agendaste una hora de taller, la solicitud ya fue enviada a la administración para su respectiva coordinación. ¡Que tengas una excelente jornada y un viaje muy seguro!
+          </p>
+          
+          <button onClick={() => window.location.reload()} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
+            Volver a escanear QR
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. VISTA DE RESUMEN (Antes de finalizar)
   if (mostrarResumen) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4">
-        <div className="max-w-md mx-auto bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 animate-fade-in">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center p-4 md:p-6">
+        <div className="w-full max-w-md mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 animate-fade-in my-auto">
           
           <div className={`p-6 text-white text-center ${bloqueado ? 'bg-red-600' : 'bg-blue-600'}`}>
             <h1 className="text-2xl font-black">Resumen de Jornada</h1>
@@ -302,8 +326,8 @@ export default function VistaConductor() {
               <p className="text-center text-xs text-slate-500">Documentos no disponibles.</p>
             )}
 
-            <button onClick={() => window.location.reload()} className="mt-8 w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors">
-              Finalizar y Volver
+            <button onClick={() => setJornadaFinalizada(true)} className="mt-8 w-full bg-slate-800 text-white font-black py-4 rounded-xl hover:bg-slate-900 shadow-md transition-colors">
+              Finalizar Jornada
             </button>
           </div>
         </div>
@@ -311,43 +335,50 @@ export default function VistaConductor() {
     );
   }
 
+  // 3. VISTA DE BLOQUEO
   if (bloqueado) {
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4 text-center">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500 animate-fade-in">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500 animate-fade-in w-full">
           <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
-          <p className="mt-4 text-slate-600">Falla critica detectada. Avise a administracion inmediatamente.</p>
-          <p className="mt-6 text-xs font-bold text-slate-400">Redirigiendo al resumen...</p>
+          <p className="mt-4 text-slate-600 font-medium">Falla crítica detectada. Avise a la administración inmediatamente.</p>
+          <div className="mt-6 flex justify-center">
+             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-700"></div>
+          </div>
         </div>
       </div>
     );
   }
 
+  // 4. VISTA DE CARGA EXITOSA
   if (encuestaCompletada) {
     return (
       <div className="min-h-screen bg-green-50 flex items-center justify-center p-4 text-center">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500 animate-fade-in">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500 animate-fade-in w-full">
           <h1 className="text-2xl font-black text-green-700">Reporte Enviado</h1>
-          <p className="mt-2 text-slate-600">Puede iniciar su jornada de manera segura.</p>
-          <p className="mt-6 text-xs font-bold text-slate-400">Redirigiendo al resumen...</p>
+          <p className="mt-2 text-slate-600 font-medium">Generando resumen de documentos...</p>
+          <div className="mt-6 flex justify-center">
+             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
+          </div>
         </div>
       </div>
     );
   }
 
+  // 5. VISTA PRINCIPAL: CHECKLIST
   return (
-    <div className="min-h-screen bg-slate-50 p-4">
-      <div className="max-w-md mx-auto bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
-        <div className="bg-blue-600 p-6 text-white text-center">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center p-4 md:p-6">
+      <div className="w-full max-w-md mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 my-auto">
+        <div className="bg-blue-600 p-6 text-white text-center shadow-inner">
           <h1 className="text-xl font-bold">Checklist Diario</h1>
           <p className="text-blue-100 font-mono text-lg mt-1 tracking-widest">{id}</p>
           {!cargandoVehiculo && vehiculo?.tipo && (
-            <p className="text-white text-xs font-black uppercase mt-2 bg-blue-700 inline-block px-3 py-1 rounded-full">{vehiculo.tipo}</p>
+            <p className="text-white text-xs font-black uppercase mt-2 bg-blue-700 inline-block px-3 py-1 rounded-full shadow-sm">{vehiculo.tipo}</p>
           )}
         </div>
 
         <form onSubmit={manejarEnvio} className="p-6 space-y-6">
-          <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm">
             <h2 className="font-bold text-slate-800 border-b border-slate-200 pb-2">Registro de Kilometraje</h2>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">
@@ -362,41 +393,41 @@ export default function VistaConductor() {
                 value={kilometraje}
                 onChange={(e) => setKilometraje(e.target.value)}
                 min={kilometrajeAnterior > 0 ? kilometrajeAnterior : 0}
-                className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold text-slate-700" 
+                className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold text-slate-700 shadow-sm" 
               />
             </div>
-            <div className="text-center text-slate-400 text-sm font-bold">O</div>
+            <div className="text-center text-slate-400 text-sm font-black uppercase tracking-widest">O</div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">Foto del Tablero</label>
               <label className="block w-full cursor-pointer">
                 <input type="file" accept="image/*" capture="environment" onChange={capturarFoto} className="hidden" />
-                <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-4 text-center hover:bg-slate-100 transition-all">
-                  {fotoPreview ? <img src={fotoPreview} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm font-bold text-blue-600">Tomar foto con la cámara</span>}
+                <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-4 text-center hover:bg-slate-50 transition-all shadow-sm">
+                  {fotoPreview ? <img src={fotoPreview} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-500 text-sm font-bold flex items-center justify-center gap-2 text-blue-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg> Tomar foto con la cámara</span>}
                 </div>
               </label>
             </div>
           </div>
 
           <div className="pt-2 border-t border-slate-100">
-            <h2 className="font-bold text-slate-800 mb-4">Inspeccion Visual</h2>
+            <h2 className="font-bold text-slate-800 mb-4 text-lg">Inspección Visual</h2>
             {preguntasDinamicas.map((p) => (
-              <div key={p.id} className="space-y-2 mb-4">
-                <p className="text-slate-700 font-medium text-sm">{p.texto}</p>
+              <div key={p.id} className="space-y-2 mb-5">
+                <p className="text-slate-700 font-medium text-sm leading-snug">{p.texto}</p>
                 <div className="flex gap-4">
                   <label className="flex-1">
                     <input type="radio" name={p.id} value="si" required className="hidden peer" />
-                    <div className="text-center py-2 rounded-xl border-2 border-slate-200 peer-checked:border-blue-600 peer-checked:bg-blue-50 cursor-pointer font-bold text-slate-400 peer-checked:text-blue-600 transition-colors">SI</div>
+                    <div className="text-center py-2.5 rounded-xl border-2 border-slate-200 peer-checked:border-blue-600 peer-checked:bg-blue-50 cursor-pointer font-bold text-slate-400 peer-checked:text-blue-600 transition-all shadow-sm">SI</div>
                   </label>
                   <label className="flex-1">
                     <input type="radio" name={p.id} value="no" required className="hidden peer" />
-                    <div className="text-center py-2 rounded-xl border-2 border-slate-200 peer-checked:border-red-600 peer-checked:bg-red-50 cursor-pointer font-bold text-slate-400 peer-checked:text-red-600 transition-colors">NO</div>
+                    <div className="text-center py-2.5 rounded-xl border-2 border-slate-200 peer-checked:border-red-600 peer-checked:bg-red-50 cursor-pointer font-bold text-slate-400 peer-checked:text-red-600 transition-all shadow-sm">NO</div>
                   </label>
                 </div>
               </div>
             ))}
           </div>
 
-          <button type="submit" disabled={subiendo} className={`w-full text-white font-bold py-4 rounded-2xl shadow-lg transition-all ${subiendo ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+          <button type="submit" disabled={subiendo} className={`w-full text-white font-black text-lg tracking-wide py-4 rounded-2xl shadow-xl transition-all mt-4 ${subiendo ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/30'}`}>
             {subiendo ? 'Enviando reporte...' : 'Finalizar Reporte'}
           </button>
         </form>
